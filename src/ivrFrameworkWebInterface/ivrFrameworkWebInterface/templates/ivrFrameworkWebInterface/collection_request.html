@@ -1,0 +1,223 @@
+{% extends "ivrFrameworkWebInterface/base.html" %}
+
+{% block content %}
+<div class="alert alert-primary" role="alert">Start a new collection request:</div>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col">
+            <div class="card">
+                <div class="card-header">Human/Human, select a conversation domain:</div>
+            </div>
+            <hr>
+            <div class="alert alert-dark" role="alert">
+                <form method="post" action="{% url 'collectionRequest' %}">
+                    <input type="text" name="human2human_collection_goal" required id="id_new_collection_goal"
+                           placeholder="Collection Goal (number >= 1)" class="form-control" cols="10">
+                    <select name="new_human2human_collection_category" required id="id_start_new_collection_request"
+                            class="form-control" cols="10">
+                        <option selected>Choose...</option>
+                        {% for category in category_list %}
+                        <option value="{{category.category}}">{{category.category}}</option>
+                        {% endfor %}
+                    </select>
+                    <div>
+                        <input id="id_start_new_collection_request_button" type="submit" class="btn btn-secondary"
+                               value="Start">
+                    </div>
+                    {% csrf_token %}
+                </form>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card">
+                <div class="card-header">Human/Bot, select a Lex Bot:</div>
+            </div>
+            <hr>
+            <div class="alert alert-dark" role="alert">
+                <form method="post" action="{% url 'collectionRequest' %}">
+                    <input type="text" name="human2bot_collection_goal" required id="id_new_collection_goal"
+                           placeholder="Collection Goal (number >= 1)" class="form-control" cols="10">
+                    <select name="new_human2bot_collection_category" required id="id_start_new_collection_request"
+                            class="form-control" cols="10">
+                        <option selected>Choose...</option>
+                        {% for bot in bot_list %}
+                        <option value="{{bot.bot}}">{{bot.bot}}</option>
+                        {% endfor %}
+                    </select>
+                    <div>
+                        <input id="id_start_new_collection_request_button" type="submit" class="btn btn-secondary"
+                               value="Start">
+                    </div>
+                    {% csrf_token %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if new_collection_request %}
+<div class="alert alert-success" role="alert">
+    New collection request is created successfully.<br/>
+    Collection PIN: {{new_collection_request.collection_pin}}<br/>
+    Conversation PIN: {{new_collection_request.conversation_pin}}<br/>
+    Collection Mode: human/{{new_collection_request.mode}}<br/>
+    Collection Goal: {{new_collection_request.collection_goal}}<br/>
+    Collection Category: {{new_collection_request.category}}
+</div>
+{% endif %}
+
+{% for error in error_list %}
+<div class="alert alert-danger" role="alert">
+    {{error}}
+</div>
+{% endfor %}
+
+{% if collection_request_list %}
+<div class="alert alert-primary" role="alert">
+    List all Current Collection Requests:
+</div>
+<table class="table table-hover">
+    <thead class="thead-dark">
+    <tr>
+        <th scope="col">Collection PIN</th>
+        <th scope="col">Collection Mode</th>
+        <th scope="col">Domain</th>
+        <th scope="col">Lex Bot</th>
+        <th scope="col">Conversation PIN</th>
+        <th scope="col">Collection Progress</th>
+        <th scope="col">Collection Status</th>
+        <th scope="col">Download Call Recordings</th>
+        <th scope="col">View Conversation Details</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for collection_request in collection_request_list %}
+    <tr>
+        <td>{{collection_request.collectionPIN}}</td>
+        {% if collection_request.mode == "human" %}
+        <td>Human/Human</td>
+        <td>{{collection_request.collectionCategory}}</td>
+        <td>-</td>
+        {% else %}
+        <td>Human/Bot</td>
+        <td>-</td>
+        <td>{{collection_request.collectionBot}}</td>
+        {% endif %}
+        <td>{{collection_request.conversationPIN}}</td>
+        <td>{{collection_request.contactIDs|length}}/{{collection_request.collectionGoal}}
+            {% if collection_request.contactIDs|length == collection_request.collectionGoal %} (completed){% endif %}
+        </td>
+        <td>
+            {% if collection_request.collectionStatus != 'STOP' %}
+            <form method="post" action="{% url 'changeCollectionStatus' %}">
+                <input type="hidden" name="collection_pin" value="{{collection_request.collectionPIN}}">
+                <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                    <label class="btn btn-outline-dark{% if collection_request.collectionStatus == 'START' %} active{% endif %}">
+                        <input type="radio" name="next_collection_status" id="option1" autocomplete="off" value="START"
+                               onchange="this.form.submit();"> Start
+                    </label>
+                    <label class="btn btn-outline-dark{% if collection_request.collectionStatus == 'PAUSE' %} active{% endif %}">
+                        <input type="radio" name="next_collection_status" id="option2" autocomplete="off" value="PAUSE"
+                               onchange="this.form.submit();"> Pause
+                    </label>
+                    <label class="btn btn-outline-dark disabled">
+                        <input type="radio" id="option3" autocomplete="off" value="STOP"> Stop
+                    </label>
+                </div>
+                {% csrf_token %}
+            </form>
+            {% else %}
+            <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                <label class="btn btn-outline-dark disabled">
+                    <input type="radio" id="option_start" autocomplete="off"> Start
+                </label>
+                <label class="btn btn-outline-dark disabled">
+                    <input type="radio" id="option_pause" autocomplete="off"> Pause
+                </label>
+                <label class="btn btn-outline-dark checked active">
+                    <input type="radio" id="option_stop" autocomplete="off"> Stop
+                </label>
+            </div>
+            {% endif %}
+        </td>
+        <td>
+            <form method="post" action="{% url 'downloadCallRecordings' %}">
+                <input type="hidden" name="collectionPIN" value="{{collection_request.collectionPIN}}">
+                <input id="id_download_call_recordings_button" type="submit" class="btn btn-outline-dark"
+                       value="Download" {% if collection_request.contactIDs|length == 0 %}disabled{% endif %}>
+                {% csrf_token %}
+            </form>
+        </td>
+        <td>
+            <form method="post" action="{% url 'collectionRequest' %}">
+                <input type="hidden" name="get_collection_pin" value="{{collection_request.collectionPIN}}">
+                <input id="id_get_collection_request" type="submit" class="btn btn-outline-dark" value="Show"
+                       {% if collection_request.contactIDs|length == 0 %}disabled{% endif %}>
+                {% csrf_token %}
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if get_collection_pin_response %}
+<hr>
+{% if "error" in get_collection_pin_response %}
+<div class="alert alert-danger" role="alert">
+    {{get_collection_pin_response.error}}
+</div>
+{% else %}
+{% if get_collection_pin_response.contact_ids|length > 0 %}
+<div class="alert alert-primary" role="alert">
+    Conversation Details of Collection Request (Collection PIN: {{get_collection_pin_response.collection_pin}})
+</div>
+<table class="table table-hover">
+    <thead class="thead-dark">
+    <tr>
+        <th scope="col">#</th>
+        <th scope="col">Contact ID(s)</th>
+        <th scope="col">AWS Transcribe Status</th>
+        <th scope="col">AWS Transcribe Job</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for contact_id, transcribe_status in get_collection_pin_response.contact_ids.items %}
+    <tr>
+        <td>{{forloop.counter}}</td>
+        <td>{{contact_id}}</td>
+        <td>{{transcribe_status}}</td>
+        <td>
+            {% if transcribe_status == "COMPLETED" %}
+            <form method="post" action="{% url 'transcribeJobRequest' %}">
+                <input type="hidden" name="download_contact_id" value="{{contact_id}}">
+                <input id="id_download_transcribe_job" type="submit" class="btn btn-outline-dark" value="Download">
+                {% csrf_token %}
+            </form>
+            {% elif transcribe_status == "NOT_STARTED" %}
+            <form method="post" action="{% url 'transcribeJobRequest' %}">
+                <input type="hidden" name="start_contact_id" value="{{contact_id}}">
+                <input id="id_start_transcribe_job" type="submit" class="btn btn-outline-dark" value="Start">
+                {% csrf_token %}
+            </form>
+            {% elif transcribe_status == "IN_PROGRESS" %}
+            <input id="id_download_transcribe_job" type="submit" class="btn btn-outline-dark" value="Download" disabled>
+            {% elif transcribe_status == "FAILED" %}
+            <input id="id_download_transcribe_job" type="submit" class="btn btn-outline-dark" value="Download" disabled>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="alert alert-danger" role="alert">
+    No Conversations Found (Collection PIN: {{get_collection_pin_response.collection_pin}}).
+</div>
+
+{% endif %}
+{% endif %}
+
+{% endif %}
+{% endblock %}

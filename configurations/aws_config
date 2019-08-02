@@ -1,0 +1,9 @@
+AWS_ACCESS_KEY_ID <AWS_secret_access_key_ID>
+AWS_ACCESS_KEY <AWS_secret_access_key>
+AWS_REGION_NAME <AWS_region_alias>
+CALL_RECORDINGS_BUCKET_NAME <AWS_S3_bucket_name>
+CONNECT_INSTANCE_ID <AWS_connect_instance_ID>
+CONNECT_SECURITY_ID <AWS_connect_security_profile_id_for_agent>
+CONNECT_ROUTING_ID <AWS_connect_routing_profile_id>
+CONNECT_PHONE_NUMBER <AWS_connect_phone_number>
+CONNECT_CCP_URL <AWS_connect_ccp_url>

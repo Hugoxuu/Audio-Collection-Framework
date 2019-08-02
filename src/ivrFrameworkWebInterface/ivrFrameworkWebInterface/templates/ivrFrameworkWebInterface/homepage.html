@@ -1,0 +1,25 @@
+{% extends "ivrFrameworkWebInterface/base.html" %}
+
+
+{% block content %}
+<div class="jumbotron jumbotron-fluid">
+    <div class="container">
+        <h1 class="display-4">Collection Requests</h1>
+        <p class="lead">In the Collection Request portal, you can start new collection requests, and check all ongoing
+            collection requests.</p>
+        <hr>
+        <a id="id_collection_request" href="{% url 'collectionRequest' %}" class="button btn btn-primary">Enter</a>
+    </div>
+</div>
+
+<div class="jumbotron jumbotron-fluid">
+    <div class="container">
+        <h1 class="display-4">User Management</h1>
+        <p class="lead">In the User Management portal, you can create new users, delete current users, and check all
+            existing users.</p>
+        <hr>
+        <a id="id_user_manage" href="{% url 'userManage' %}" class="button btn btn-primary">Enter</a>
+    </div>
+</div>
+
+{% endblock %}

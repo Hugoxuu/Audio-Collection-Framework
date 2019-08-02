@@ -1,0 +1,34 @@
+*~
+*#
+*.swp
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+/.coverage
+/.coverage.*
+/.cache
+/.pytest_cache
+/.mypy_cache
+
+/doc/_apidoc/
+/build
+
+# Unwanted files
+*.bash_profile
+/AWSDeepSenseSpokenDataCollectionFramework.iml
+
+# Local file metadata
+.DS_Store
+
+# Files and databases for local use only
+/src/aws_deep_sense_spoken_data_collection_framework/API_Trials/
+/src/aws_deep_sense_spoken_data_collection_framework/file/
+/src/ivrFrameworkWebInterface/ivrFrameworkWebInterface/static/callRecordings/
+db.sqlite3
+
+# Configuration files
+/configurations/*
+!/configurations/aws_config

@@ -1,0 +1,91 @@
+package.AWSDeepSenseSpokenDataCollectionFramework = {
+    interfaces = (1.0);
+
+    deploy = {
+        generic = true;
+    };
+
+    build-environment = {
+        chroot = basic;
+        network-access = blocked;
+    };
+
+    # See https://w.amazon.com/?BrazilPython3
+    build-system = brazilpython;
+    build-tools = {
+        1.0 = {
+            BrazilPython = 3.0;
+            Python34 = 1.0;
+            CPython34 = default;
+        };
+    };
+
+    dependencies = {
+        1.0 = {
+            # Deploy the default python interpreter for your versionset. This
+            # guarantees `$ENVROOT/bin/python` and the specific interpreter
+            # version it resolves to will exist in your deployment.
+            #
+            # This is only needed for application packages that will be run
+            # from the CLI; if you are making a library, this is not needed.
+            #
+            Python = default;
+            # Uncomment if you want working auto-created bin wrapper scripts.
+            # See setup.py
+
+            Python-setuptools = default;
+            AWSDeepSenseScienceDataProcessingScripts = 1.0;
+            Boto3 = 1.x;
+            Python-scipy = 1.2.x;
+            Python-numpy = 1.15.x;
+            Python-selenium = 3.x;
+            Python-Django = 2.0.x;
+            Pydub = 0.16.x;
+            Python-moto = 1.x;
+        };
+    };
+
+    test-dependencies = {
+        1.0 = {
+            # Run tests with py.test in BrazilPython
+            BrazilPython-Pytest = 3.x;
+
+            # Coverage for Python tests.
+            Python-Pytest-cov = 2.4.x;
+            Python-cov-core = 1.15.x;
+            Coverage = 4.x;
+
+            # Publish test results to Brazil's test and coverage detection
+            BrazilPythonTestSupport = 3.0;
+
+            # Sphinx documentation with Amazon customizations so that
+            # links on code.amazon.com work
+            Sphinx = 1.x;
+            Python-scipy = 1.2.x;
+            Python-numpy = 1.15.x;
+
+            Python-amazon-doc-utils = 1.0;
+            Python-Mock = 2.0.x;
+            Boto3 = 1.x;
+            Python-selenium = 3.x;
+            # Having IPython support is nice and handy; let's pull that in here.
+            # If you uncomment this, you can invoke this using
+            # `brazil-test-exec ipython`.
+            #
+            # Note that iPython 6.x does not work with Python 2.7. If your
+            # *versionset* is only 2.7, you're not going to be able to build
+            # packages that depend on this, and you might have to consider
+            # upgrading, or adding a build flag enabling one of the 3.x series
+            # in your versionset. That's a good idea anyway, since 2.7 is
+            # scheduled to be deprecated at the end of 2019
+
+            # Python-ipython = 6.x;
+        };
+    };
+
+    targets = {
+        # see setup.py for the actual build logic
+        # keep this line for brazil-path to work
+        python = { type = python; };
+    };
+};

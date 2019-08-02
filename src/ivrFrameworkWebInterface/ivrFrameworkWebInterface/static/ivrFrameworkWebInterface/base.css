@@ -1,0 +1,114 @@
+input {
+    margin: 5px 0px;
+    font-size: x-large;
+}
+
+.content {
+    font-family: sans-serif;
+    font-size: medium;
+    padding: 10px;
+}
+
+.li_style {
+    padding: 25px 50px;
+    list-style-type: none;
+}
+
+.login_style {
+    position: absolute;
+    left: 50%;
+    top: 40%;
+    width: 400px;
+    height: 200px;
+    margin-left: -100px;
+    margin-top: -50px;
+
+}
+
+.btn1 {
+    float: left;
+    font-size: 15px;
+    padding: 7px 14px;
+    border-bottom: 4px solid #428bca;
+}
+
+.main_content_box {
+    width: 100%;
+    margin: 20px 0px 0px 0px;
+}
+
+.user-img img {
+    width: 100px;
+    height: 100px;
+    margin-top: -50px;
+    margin-bottom: 35px;
+}
+
+.main-section {
+    margin: 0 auto;
+    margin-top: 35%;
+    padding: 0;
+}
+
+.modal-content {
+    /* background: white;*/
+    background-color: #3b4652;
+    opacity: 0.80;
+    padding: 0 18px;
+    box-shadow: 0 0 3px #848484;
+
+}
+
+.form-group-input {
+    margin-bottom: 25px;
+}
+
+.form-group-input input {
+    height: 42px;
+    border-radius: 5px;
+    border: 0px;
+    font-size: 18px;
+    padding-left: 54px;
+}
+
+#id_username {
+    height: 42px;
+    border-radius: 5px;
+    border: 0px;
+    font-size: 18px;
+    padding-left: 54px;
+}
+
+.fa-lock {
+    position: absolute;
+    padding-top: 8px;
+    font-size: 22px;
+    left: 28px;
+}
+
+.fa-envelope-open {
+    position: absolute;
+    padding-top: 8px;
+    font-size: 22px;
+    left: 28px;
+}
+
+.fa-user {
+    position: absolute;
+    padding-top: 8px;
+    font-size: 22px;
+    left: 28px;
+}
+
+.btn1 {
+    float: left;
+    font-size: 15px;
+    padding: 7px 14px;
+    border-bottom: 4px solid #428bca;
+    margin-bottom: 20px
+}
+
+.background {
+    background: url(../image/background.jpg);
+    background-size: cover;
+}
