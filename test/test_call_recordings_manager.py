@@ -37,7 +37,7 @@ class TestCallRecordingsManage(unittest.TestCase):
         with mock.patch('builtins.input') as keyboard_mock:
             keyboard_mock.return_value = ''
             test_collection_pin = '123456'
-            expected_response = os.path.join(os.getcwd(), 'file', test_collection_pin)
+            expected_response = os.path.join(os.getcwd(), 'audio_file', test_collection_pin)
             actual_response = call_recordings_manager.ask_output_directory(test_collection_pin)
             self.assertEqual(actual_response, expected_response)
 
@@ -45,7 +45,7 @@ class TestCallRecordingsManage(unittest.TestCase):
         with mock.patch('builtins.input') as keyboard_mock:
             keyboard_mock.return_value = '/invalid_file_path/invalid_file_path/***'
             test_collection_pin = '123456'
-            expected_response = os.path.join(os.getcwd(), 'file', test_collection_pin)
+            expected_response = os.path.join(os.getcwd(), 'audio_file', test_collection_pin)
             actual_response = call_recordings_manager.ask_output_directory(test_collection_pin)
             self.assertEqual(actual_response, expected_response)
 

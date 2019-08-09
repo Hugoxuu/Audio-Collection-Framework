@@ -7,6 +7,7 @@ import mock
 from moto import mock_dynamodb2
 from aws_deep_sense_spoken_data_collection_framework.collection_request_manager import CollectionRequestManager
 import aws_deep_sense_spoken_data_collection_framework.utils as utils
+import unittest_helper_methods as helper
 
 # Set up default session for mocking AWS PYTHON SDK (boto3)
 boto3.setup_default_session()
@@ -29,24 +30,6 @@ collection_request_manager_method_prefix = '.'.join(collection_request_manager_m
 
 
 class TestCollectionRequestManage(unittest.TestCase):
-    def test_is_category_choice_valid(self):
-        # Test 1
-        expected_response = False
-        actual_response = collection_request_manager.is_number_choice_valid('0', 1)
-        self.assertEqual(actual_response, expected_response)
-        # Test 2
-        expected_response = False
-        actual_response = collection_request_manager.is_number_choice_valid('2', 1)
-        self.assertEqual(actual_response, expected_response)
-        # Test 3
-        expected_response = True
-        actual_response = collection_request_manager.is_number_choice_valid('1', 1)
-        self.assertEqual(actual_response, expected_response)
-        # Test 4
-        expected_response = False
-        actual_response = collection_request_manager.is_number_choice_valid('1abc', 100)
-        self.assertEqual(actual_response, expected_response)
-
     @mock.patch('builtins.input', return_value='10')
     def test_ask_collection_goal(self, input):
         expected_response = 10
@@ -55,7 +38,7 @@ class TestCollectionRequestManage(unittest.TestCase):
 
     @mock_dynamodb2
     def test_change_collection_status_given_info(self):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
         test_collection_pin = '123456'
@@ -107,7 +90,7 @@ class TestCollectionRequestManage(unittest.TestCase):
     @mock.patch('aws_deep_sense_spoken_data_collection_framework.utils.ask_collection_pin', return_value='123456')
     @mock.patch('builtins.input', return_value='PAUSE')
     def test_change_collection_status(self, input1, input2):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
         test_collection_pin = '123456'
@@ -125,14 +108,17 @@ class TestCollectionRequestManage(unittest.TestCase):
 
     @mock_dynamodb2
     def test_list_collect_requests(self):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
 
         with table.batch_writer() as batch:
-            user_item_1 = {utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: '123456', 'conversationPIN': '987654',
-                           'mode': 'human', 'contactIDs': [], 'collectionGoal': 12, 'collectionStatus': 'START',
-                           'collectionCategory': 'travel'}
+            user_item_1 = {utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: '123456',
+                           utils.COLLECTION_REQUEST_DYNAMODB_SECONDARY_INDEX_KEY: '987654', 'mode': 'human',
+                           'contactIDs': [], 'collectionGoal': 1, 'collectionStatus': 'START',
+                           'collectionName': 'test_collection_name',
+                           'routingInfo': {'queueNumber': '1', 'queueID': 'test_queue_id',
+                                           'routingProfileID': 'test_routing_profile_id'}}
             batch.put_item(Item=user_item_1)
 
         expected_response = [user_item_1]
@@ -141,20 +127,23 @@ class TestCollectionRequestManage(unittest.TestCase):
 
     @mock_dynamodb2
     def test_get_collection_request_given_pin(self):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
 
         # test 1
         with table.batch_writer() as batch:
-            user_item = {utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: '123456', 'conversationPIN': '987654',
-                         'mode': 'human', 'contactIDs': [], 'collectionGoal': 12, 'collectionStatus': 'START',
-                         'collectionCategory': 'travel'}
+            user_item = {utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: '123456',
+                         utils.COLLECTION_REQUEST_DYNAMODB_SECONDARY_INDEX_KEY: '987654', 'mode': 'human',
+                         'contactIDs': [], 'collectionGoal': 1, 'collectionStatus': 'START',
+                         'collectionName': 'test_collection_name',
+                         'routingInfo': {'queueNumber': '1', 'queueID': 'test_queue_id',
+                                         'routingProfileID': 'test_routing_profile_id'}}
             batch.put_item(Item=user_item)
 
         expected_response = {'collection_pin': '123456', 'conversation_pin': '987654', 'mode': 'human',
-                             'collection_info': 'travel', 'contact_ids': [], 'collection_goal': 12,
-                             'collectionStatus': 'START'}
+                             'contact_ids': [], 'collection_goal': 1, 'collection_status': 'START',
+                             'collection_name': 'test_collection_name', 'collection_info': None}
         actual_response = collection_request_manager.get_collection_request_given_pin('123456')
         self.assertEqual(actual_response, expected_response)
 
@@ -162,12 +151,12 @@ class TestCollectionRequestManage(unittest.TestCase):
         with table.batch_writer() as batch:
             user_item = {utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: '987654', 'conversationPIN': '123456',
                          'mode': 'bot', 'contactIDs': ['123'], 'collectionGoal': 1, 'collectionStatus': 'PAUSE',
-                         'collectionBot': 'OrderFlowers'}
+                         'collectionBot': 'OrderFlowers', 'collectionName': 'test_collection_name'}
             batch.put_item(Item=user_item)
 
         expected_response = {'collection_pin': '987654', 'conversation_pin': '123456', 'mode': 'bot',
                              'collection_info': 'OrderFlowers', 'contact_ids': ['123'], 'collection_goal': 1,
-                             'collectionStatus': 'PAUSE'}
+                             'collection_status': 'PAUSE', 'collection_name': 'test_collection_name'}
         actual_response = collection_request_manager.get_collection_request_given_pin('987654')
         self.assertEqual(actual_response, expected_response)
 
@@ -179,17 +168,18 @@ class TestCollectionRequestManage(unittest.TestCase):
 
     @mock_dynamodb2
     def test_save2db(self):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
 
         # test 1
         collection_pin = '123456'
         conversation_pin = '987654'
         mode = 'human'
-        collection_choice = {'collectionCategory': 'finance', 'queueArn': 'test_queue_arn'}
+        collection_info = {'routingInfo': {}}
         collection_goal = 10
         collection_status = 'START'
-        collection_request_manager.save2db(collection_pin, conversation_pin, mode, collection_choice, collection_goal,
-                                           collection_status)
+        collection_name = 'test_collection_name'
+        collection_request_manager.save2db(collection_pin, conversation_pin, mode, collection_info, collection_goal,
+                                           collection_status, collection_name)
 
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
@@ -197,8 +187,8 @@ class TestCollectionRequestManage(unittest.TestCase):
         if 'Item' not in session:
             raise AssertionError
         expected_response = {'collectionPIN': '123456', 'conversationPIN': '987654', 'mode': 'human', 'contactIDs': [],
-                             'collectionGoal': 10, 'collectionStatus': 'START',
-                             'collectionCategory': 'finance', 'queueArn': 'test_queue_arn'}
+                             'collectionGoal': 10, 'collectionStatus': 'START', 'collectionName': collection_name,
+                             'routingInfo': {}}
         actual_response = session['Item']
         self.assertEqual(actual_response, expected_response)
 
@@ -206,11 +196,12 @@ class TestCollectionRequestManage(unittest.TestCase):
         collection_pin = '987654'
         conversation_pin = '123456'
         mode = 'bot'
-        collection_choice = {'collectionBot': 'OrderFlowers'}
+        collection_info = {'collectionBot': 'OrderFlowers'}
         collection_goal = 1
         collection_status = 'START'
-        collection_request_manager.save2db(collection_pin, conversation_pin, mode, collection_choice, collection_goal,
-                                           collection_status)
+        collection_name = 'test_collection_name'
+        collection_request_manager.save2db(collection_pin, conversation_pin, mode, collection_info, collection_goal,
+                                           collection_status, collection_name)
 
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
@@ -219,64 +210,14 @@ class TestCollectionRequestManage(unittest.TestCase):
             raise AssertionError
         expected_response = {'collectionPIN': '987654', 'conversationPIN': '123456', 'mode': 'bot', 'contactIDs': [],
                              'collectionGoal': 1, 'collectionStatus': 'START',
-                             'collectionBot': 'OrderFlowers'}
+                             'collectionBot': 'OrderFlowers', 'collectionName': collection_name}
         actual_response = session['Item']
         self.assertEqual(actual_response, expected_response)
 
     @mock_dynamodb2
-    def test_get_available_collection_category(self):
-        self.create_mock_dynamodb_collection_category_table()
-        self.create_mock_dynamodb_collection_bot_table()
-        dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
-        category_table = dynamodb_resource.Table('collectionCategory')
-        with category_table.batch_writer() as batch:
-            finance_category = {'category': 'finance', 'queueArn': 'test_finance_queue_arn'}
-            batch.put_item(Item=finance_category)
-            travel_category = {'category': 'travel', 'queueArn': 'test_travel_queue_arn'}
-            batch.put_item(Item=travel_category)
-            enterprise_category = {'category': 'enterprise', 'queueArn': 'test_enterprise_queue_arn'}
-            batch.put_item(Item=enterprise_category)
-
-        bot_table = dynamodb_resource.Table('collectionBot')
-        with bot_table.batch_writer() as batch:
-            order_flowers_bot = {'bot': 'OrderFlowers'}
-            batch.put_item(Item=order_flowers_bot)
-            book_trip_bot = {'bot': 'BookTrip'}
-            batch.put_item(Item=book_trip_bot)
-
-        actual_category, actual_bot = collection_request_manager.get_available_collection_category()
-        self.assertTrue(finance_category in actual_category)
-        self.assertTrue(travel_category in actual_category)
-        self.assertTrue(enterprise_category in actual_category)
-        self.assertTrue(order_flowers_bot in actual_bot)
-        self.assertTrue(book_trip_bot in actual_bot)
-
-    @mock_dynamodb2
-    @mock.patch('builtins.input', return_value='1')
-    def test_ask_collection_category(self, input):
-        self.create_mock_dynamodb_collection_category_table()
-        dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
-        table = dynamodb_resource.Table('collectionCategory')
-        with table.batch_writer() as batch:
-            finance_category = {'category': 'finance', 'queueArn': 'test_finance_queueArn'}
-            batch.put_item(Item=finance_category)
-            travel_category = {'category': 'travel', 'queueArn': 'test_travel_queueArn'}
-            batch.put_item(Item=travel_category)
-            enterprise_category = {'category': 'enterprise', 'queueArn': 'test_enterprise_queueArn'}
-            batch.put_item(Item=enterprise_category)
-
-        expected_response_1 = {'collectionCategory': 'finance', 'queueArn': 'test_finance_queueArn'}
-        expected_response_2 = {'collectionCategory': 'travel', 'queueArn': 'test_travel_queueArn'}
-        expected_response_3 = {'collectionCategory': 'enterprise', 'queueArn': 'test_enterprise_queueArn'}
-        actual_response = collection_request_manager.ask_collection_category()
-        print(actual_response)
-        self.assertTrue(
-            actual_response == expected_response_1 or actual_response == expected_response_2 or actual_response == expected_response_3)
-
-    @mock_dynamodb2
     @mock.patch('builtins.input', return_value='1')
     def test_ask_collection_bot(self, input):
-        self.create_mock_dynamodb_collection_bot_table()
+        helper.create_mock_dynamodb_collection_bot_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table('collectionBot')
         with table.batch_writer() as batch:
@@ -285,8 +226,8 @@ class TestCollectionRequestManage(unittest.TestCase):
             user_item = {'bot': 'BookTrip'}
             batch.put_item(Item=user_item)
 
-        expected_response_1 = {'collectionBot': 'OrderFlowers'}
-        expected_response_2 = {'collectionBot': 'BookTrip'}
+        expected_response_1 = 'OrderFlowers'
+        expected_response_2 = 'BookTrip'
         actual_response = collection_request_manager.ask_collection_bot()
         self.assertTrue(actual_response == expected_response_1 or actual_response == expected_response_2)
 
@@ -307,10 +248,10 @@ class TestCollectionRequestManage(unittest.TestCase):
 
     @mock_dynamodb2
     def test_generate_collection_pin(self):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
-        expected_num_collection_session = 1000
+        expected_num_collection_session = 100
         for i in range(expected_num_collection_session):
             collection_pin = collection_request_manager.generate_collection_pin()
             with table.batch_writer() as batch:
@@ -322,10 +263,10 @@ class TestCollectionRequestManage(unittest.TestCase):
 
     @mock_dynamodb2
     def test_generate_conversation_pin(self):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
-        expected_num_collection_session = 1000
+        expected_num_collection_session = 100
         for i in range(expected_num_collection_session):
             conversation_pin = collection_request_manager.generate_conversation_pin()
             with table.batch_writer() as batch:
@@ -337,69 +278,75 @@ class TestCollectionRequestManage(unittest.TestCase):
 
     @mock_dynamodb2
     def test_generate_collection_request_given_info(self):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         # test 1
-        self.create_mock_dynamodb_collection_category_table()
-        table = dynamodb_resource.Table('collectionCategory')
+        helper.create_mock_dynamodb_queue_pool_table()
+        table = dynamodb_resource.Table('connectQueuePool')
         with table.batch_writer() as batch:
-            finance_category = {'category': 'finance', 'queueArn': 'test_finance_queueArn'}
-            batch.put_item(Item=finance_category)
+            routing_info = {'queueNumber': '1', 'queueID': 'test_queue_id',
+                            'routingProfileID': 'test_routing_profile_id'}
+            batch.put_item(Item=routing_info)
 
         mode = 'human'
-        collection_category = 'finance'
-        collection_goal = 2
-        collection_pin, conversation_pin = collection_request_manager.generate_collection_request_given_info(mode,
-                                                                                                             collection_category,
-                                                                                                             collection_goal)
+        collection_goal = 1
+        collection_name = 'test_collection_name'
+        collection_pin, conversation_pin = collection_request_manager.generate_collection_request_given_info(mode, None,
+                                                                                                             collection_goal,
+                                                                                                             collection_name)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
         session = table.get_item(Key={utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: collection_pin})
         if 'Item' not in session:
             raise AssertionError
-        expected_response = {'collectionPIN': collection_pin, 'conversationPIN': conversation_pin, 'mode': mode,
-                             'contactIDs': [],
-                             'collectionGoal': collection_goal, 'collectionStatus': 'START',
-                             'collectionCategory': collection_category,
-                             'queueArn': 'test_finance_queueArn'}
+        expected_response = {utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: collection_pin,
+                             utils.COLLECTION_REQUEST_DYNAMODB_SECONDARY_INDEX_KEY: conversation_pin, 'mode': 'human',
+                             'contactIDs': [], 'collectionGoal': 1, 'collectionStatus': 'START',
+                             'collectionName': 'test_collection_name',
+                             'routingInfo': {'queueNumber': '1', 'queueID': 'test_queue_id',
+                                             'routingProfileID': 'test_routing_profile_id'}}
+
         actual_response = session['Item']
         self.assertEqual(actual_response, expected_response)
 
         # test 2
-        self.create_mock_dynamodb_collection_bot_table()
+        helper.create_mock_dynamodb_collection_bot_table()
         table = dynamodb_resource.Table('collectionBot')
         with table.batch_writer() as batch:
             order_flowers_bot = {'bot': 'OrderFlowers'}
             batch.put_item(Item=order_flowers_bot)
 
         mode = 'bot'
-        collection_category = 'OrderFlowers'
+        collection_bot = 'OrderFlowers'
         collection_goal = 2
+        collection_name = 'test_collection_name'
         collection_pin, conversation_pin = collection_request_manager.generate_collection_request_given_info(mode,
-                                                                                                             collection_category,
-                                                                                                             collection_goal)
+                                                                                                             collection_bot,
+                                                                                                             collection_goal,
+                                                                                                             collection_name)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
         session = table.get_item(Key={utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: collection_pin})
         if 'Item' not in session:
             raise AssertionError
         expected_response = {'collectionPIN': collection_pin, 'conversationPIN': conversation_pin, 'mode': mode,
                              'contactIDs': [], 'collectionGoal': collection_goal, 'collectionStatus': 'START',
-                             'collectionBot': collection_category}
+                             'collectionBot': collection_bot, 'collectionName': 'test_collection_name'}
         actual_response = session['Item']
         self.assertEqual(actual_response, expected_response)
 
     @mock_dynamodb2
     @mock.patch('{}.generate_collection_pin'.format(collection_request_manager_method_prefix), return_value='123456')
     @mock.patch('{}.generate_conversation_pin'.format(collection_request_manager_method_prefix), return_value='987654')
+    @mock.patch('{}.ask_collection_name'.format(collection_request_manager_method_prefix), return_value='name')
     @mock.patch('{}.ask_collection_mode'.format(collection_request_manager_method_prefix), return_value=True)
     @mock.patch('{}.ask_collection_goal'.format(collection_request_manager_method_prefix), return_value=10)
-    @mock.patch('{}.ask_collection_category'.format(collection_request_manager_method_prefix),
-                return_value={'collectionCategory': 'finance', 'queueArn': 'test_finance_queueArn'})
-    def test_generate_collection_request_test1(self, input1, input2, input3, input4, input5):
-        self.create_mock_dynamodb_collection_session_table()
+    @mock.patch('{}.get_routing_info'.format(collection_request_manager_method_prefix), return_value={})
+    @mock.patch('{}.get_num_available_queue'.format(collection_request_manager_method_prefix), return_value=1)
+    def test1_generate_collection_request(self, input1, input2, input3, input4, input5, input6, input7):
+        helper.create_mock_dynamodb_collection_session_table()
         collection_request_manager.generate_collect_request()
         expected_response = {'collectionPIN': '123456', 'conversationPIN': '987654', 'mode': 'human', 'contactIDs': [],
-                             'collectionGoal': 10, 'collectionStatus': 'START',
-                             'collectionCategory': 'finance', 'queueArn': 'test_finance_queueArn'}
+                             'collectionGoal': 10, 'collectionStatus': 'START', 'collectionName': 'name',
+                             'routingInfo': {}}
 
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
@@ -412,16 +359,16 @@ class TestCollectionRequestManage(unittest.TestCase):
     @mock_dynamodb2
     @mock.patch('{}.generate_collection_pin'.format(collection_request_manager_method_prefix), return_value='123456')
     @mock.patch('{}.generate_conversation_pin'.format(collection_request_manager_method_prefix), return_value='987654')
+    @mock.patch('{}.ask_collection_name'.format(collection_request_manager_method_prefix), return_value='name')
     @mock.patch('{}.ask_collection_mode'.format(collection_request_manager_method_prefix), return_value=False)
     @mock.patch('{}.ask_collection_goal'.format(collection_request_manager_method_prefix), return_value=10)
-    @mock.patch('{}.ask_collection_bot'.format(collection_request_manager_method_prefix),
-                return_value={'collectionBot': 'OrderFlowers'})
-    def test_generate_collection_request_test2(self, input1, input2, input3, input4, input5):
-        self.create_mock_dynamodb_collection_session_table()
+    @mock.patch('{}.ask_collection_bot'.format(collection_request_manager_method_prefix), return_value='OrderFlowers')
+    def test2_generate_collection_request(self, input1, input2, input3, input4, input5, input6):
+        helper.create_mock_dynamodb_collection_session_table()
         collection_request_manager.generate_collect_request()
         expected_response = {'collectionPIN': '123456', 'conversationPIN': '987654', 'mode': 'bot', 'contactIDs': [],
                              'collectionGoal': 10, 'collectionStatus': 'START',
-                             'collectionBot': 'OrderFlowers'}
+                             'collectionBot': 'OrderFlowers', 'collectionName': 'name'}
 
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
@@ -431,89 +378,83 @@ class TestCollectionRequestManage(unittest.TestCase):
         actual_response = session['Item']
         self.assertEqual(actual_response, expected_response)
 
-    def create_mock_dynamodb_collection_session_table(self):
-        dynamodb_client = boto3.client('dynamodb', region_name=AWS_REGION_NAME)
-        response = dynamodb_client.create_table(
-            TableName=utils.COLLECTION_REQUEST_DYNAMODB_TABLE,
-            KeySchema=[
-                {
-                    'AttributeName': utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY,
-                    'KeyType': 'HASH'
-                },
-            ],
-            AttributeDefinitions=[
-                {
-                    'AttributeName': utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY,
-                    'AttributeType': 'S'
-                },
-            ],
-            ProvisionedThroughput={
-                'ReadCapacityUnits': 10,
-                'WriteCapacityUnits': 10,
-            },
-            GlobalSecondaryIndexes=[
-                {
-                    'IndexName': utils.COLLECTION_REQUEST_DYNAMODB_SECONDARY_INDEX,
-                    'KeySchema': [
-                        {
-                            'AttributeName': utils.COLLECTION_REQUEST_DYNAMODB_SECONDARY_INDEX_KEY,
-                            'KeyType': 'HASH'
-                        },
-                    ],
-                    'Projection': {
-                        'ProjectionType': 'ALL',
-                    },
-                },
-            ],
-        )
+    @mock_dynamodb2
+    def test_get_routing_info(self):
+        helper.create_mock_dynamodb_queue_pool_table()
+        dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
+        table = dynamodb_resource.Table('connectQueuePool')
+        with table.batch_writer() as batch:
+            routing_info = {'queueNumber': 1, 'queueID': 'test_queue_id',
+                            'routingProfileID': 'test_routing_profile_id'}
+            batch.put_item(Item=routing_info)
+        # test 1
+        expected_response = routing_info
+        actual_response = collection_request_manager.get_routing_info()
+        self.assertEqual(actual_response, expected_response)
 
-    def create_mock_dynamodb_collection_category_table(self):
-        dynamodb_client = boto3.client('dynamodb', region_name=AWS_REGION_NAME)
-        response = dynamodb_client.create_table(
-            TableName='collectionCategory',
-            KeySchema=[
-                {
-                    'AttributeName': 'category',
-                    'KeyType': 'HASH'
-                },
-            ],
-            AttributeDefinitions=[
-                {
-                    'AttributeName': 'category',
-                    'AttributeType': 'S'
-                },
-                {
-                    'AttributeName': 'queueArn',
-                    'AttributeType': 'S'
-                }
-            ],
-            ProvisionedThroughput={
-                'ReadCapacityUnits': 10,
-                'WriteCapacityUnits': 10,
-            },
-        )
+        expected_response = 0
+        actual_response = collection_request_manager.get_num_available_queue()
+        self.assertEqual(actual_response, expected_response)
 
-    def create_mock_dynamodb_collection_bot_table(self):
-        dynamodb_client = boto3.client('dynamodb', region_name=AWS_REGION_NAME)
-        response = dynamodb_client.create_table(
-            TableName='collectionBot',
-            KeySchema=[
-                {
-                    'AttributeName': 'bot',
-                    'KeyType': 'HASH'
-                },
-            ],
-            AttributeDefinitions=[
-                {
-                    'AttributeName': 'bot',
-                    'AttributeType': 'S'
-                },
-            ],
-            ProvisionedThroughput={
-                'ReadCapacityUnits': 10,
-                'WriteCapacityUnits': 10,
-            },
+        # test 2
+        with table.batch_writer() as batch:
+            routing_info_num1 = {'queueNumber': 1, 'queueID': 'test_queue_id',
+                                 'routingProfileID': 'test_routing_profile_id'}
+            batch.put_item(Item=routing_info_num1)
+            routing_info_num2 = {'queueNumber': 2, 'queueID': 'test_queue_id',
+                                 'routingProfileID': 'test_routing_profile_id'}
+            batch.put_item(Item=routing_info_num2)
+            routing_info_num3 = {'queueNumber': 3, 'queueID': 'test_queue_id',
+                                 'routingProfileID': 'test_routing_profile_id'}
+            batch.put_item(Item=routing_info_num3)
+        actual_response_num1 = collection_request_manager.get_routing_info()
+        actual_response_num2 = collection_request_manager.get_routing_info()
+        actual_response_num3 = collection_request_manager.get_routing_info()
+        with table.batch_writer() as batch:
+            batch.put_item(Item=actual_response_num1)
+            batch.put_item(Item=actual_response_num2)
+            batch.put_item(Item=actual_response_num3)
+
+        expected_response = 3
+        actual_response = collection_request_manager.get_num_available_queue()
+        self.assertEqual(actual_response, expected_response)
+
+    @mock_dynamodb2
+    def test_get_num_available_queue(self):
+        helper.create_mock_dynamodb_queue_pool_table()
+        dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
+        table = dynamodb_resource.Table('connectQueuePool')
+
+        # test 1
+        expected_response = 0
+        actual_response = collection_request_manager.get_num_available_queue()
+        self.assertEqual(actual_response, expected_response)
+
+        # test 2
+        with table.batch_writer() as batch:
+            routing_info_num1 = {'queueNumber': 1, 'queueID': 'test_queue_id',
+                                 'routingProfileID': 'test_routing_profile_id'}
+            batch.put_item(Item=routing_info_num1)
+            routing_info_num2 = {'queueNumber': 2, 'queueID': 'test_queue_id',
+                                 'routingProfileID': 'test_routing_profile_id'}
+            batch.put_item(Item=routing_info_num2)
+            routing_info_num3 = {'queueNumber': 3, 'queueID': 'test_queue_id',
+                                 'routingProfileID': 'test_routing_profile_id'}
+            batch.put_item(Item=routing_info_num3)
+
+        expected_response = 3
+        actual_response = collection_request_manager.get_num_available_queue()
+        self.assertEqual(actual_response, expected_response)
+
+        # test 3
+        table.delete_item(
+            Key={
+                'queueNumber': 1
+            }
         )
+        expected_response = 2
+        actual_response = collection_request_manager.get_num_available_queue()
+        self.assertEqual(actual_response, expected_response)
 
 
 if __name__ == '__main__':

@@ -1,4 +1,5 @@
 """
+trigger_lambda_function.py:
 Forward the parameters from Amazon Connect and
 Trigger another lambda function which does Kinesis Video Streaming Parsing.
 
@@ -6,12 +7,20 @@ Trigger another lambda function which does Kinesis Video Streaming Parsing.
 
 import json
 import boto3
+import logging
 
 HTTP_RESPONSE_SUCCESS_CODE = 200
 KVS_PARSER_LAMBDA_FUNCTION = 'KVSTranscribeStreamingLambda'
 
 
 def lambda_handler(event, context):
+    """
+    The caller function of the lambda function
+    :param event: event-specified information, type: dict
+    :param context: context information (Not used)
+    :return: response dict
+    """
+    logging.info(event)
     output_event = dict()
     output_event['streamARN'] = event['Details']['ContactData']['MediaStreams']['Customer']['Audio']['StreamARN']
     output_event['startFragmentNum'] = event['Details']['ContactData']['MediaStreams']['Customer']['Audio'][
@@ -25,8 +34,9 @@ def lambda_handler(event, context):
     invoke_response = lambda_client.invoke(FunctionName=KVS_PARSER_LAMBDA_FUNCTION,
                                            InvocationType='Event',
                                            Payload=json.dumps(output_event))
-
-    return {
+    response = {
         'statusCode': HTTP_RESPONSE_SUCCESS_CODE,
         'body': json.dumps('Success')
     }
+    logging.info(response)
+    return response

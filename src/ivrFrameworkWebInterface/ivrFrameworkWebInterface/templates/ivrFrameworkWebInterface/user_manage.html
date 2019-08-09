@@ -15,48 +15,62 @@
 {% endblock %}
 
 {% block content %}
-<!-- <div class="alert alert-primary" role="alert">User Management:</div>
-<div class="container-fluid">
-	<div class="row">
-		<div class="col"> -->
 <div class="alert alert-primary" role="alert">Create New User:</div>
-<div class="alert alert-dark" role="alert">
-    <form method="post" action="{% url 'userManage' %}">
-        <input type="text" name="new_user_name" required id="id_create_new_user_name"
-               placeholder="User Name" class="form-control" cols="10">
-        <select name="new_user_role" required id="id_create_new_user_role" class="form-control" cols="10">
-            <option selected>Choose a Conversation Role...</option>
-            <option value="customer">customer</option>
-            <option value="agent">agent</option>
-        </select>
-        <div>
-            <input id="id_create_new_user_button" type="submit" class="btn btn-secondary" value="Create">
+<div class="container-fluid">
+    <div class="row">
+        <div class="col">
+            <div class="card">
+                <div class="card-header">Conversation Role: Customer</div>
+            </div>
+            <hr>
+            <div class="alert alert-dark" role="alert">
+                <form method="post" action="{% url 'userManage' %}">
+                    <div>
+                        <input type="hidden" name="new_user_role" required id="id_create_new_user_role" value="customer">
+                        <input type="text" name="new_user_name" required id="id_create_new_user_name"
+                               placeholder="User Name" class="form-control" cols="10">
+                        <input id="id_create_new_user_button" type="submit" class="btn btn-secondary" value="Create">
+                    </div>
+                    {% csrf_token %}
+                </form>
+            </div>
         </div>
-        {% csrf_token %}
-    </form>
+        <div class="col">
+            <div class="card">
+                <div class="card-header">Conversation Role: Agent</div>
+            </div>
+            <hr>
+            <div class="alert alert-dark" role="alert">
+                <form method="post" action="{% url 'userManage' %}">
+                    <div>
+                        <input type="hidden" name="new_user_role" required id="id_create_new_user_role" value="agent">
+                        <input type="text" name="new_user_name" required id="id_create_new_user_name"
+                               placeholder="User Name" class="form-control" cols="10">
+                        <select name="new_user_collection_pin" required id="id_start_new_collection_request"
+                                class="form-control" cols="10">
+                            <option value="not_selected" selected>Choose a collection quest...</option>
+                            {% for collection_request in collection_request_list %}
+                            <option value="{{collection_request.collectionPIN}}">Collection PIN: {{collection_request.collectionPIN}}, Collection Name: {{collection_request.collectionName}}</option>
+                            {% endfor %}
+                        </select>
+                        <input id="id_create_new_user_button" type="submit" class="btn btn-secondary" value="Create" {% if collection_request_list|length == 0 %}disabled{% endif %}>
+                    </div>
+                    {% csrf_token %}
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
-<!-- 		</div> -->
-<!-- 		<div class="col">
-			<div class="alert alert-primary" role="alert">Delete Current User:</div>
-			<div class="alert alert-dark" role="alert">
-				<form method="post" action="{% url 'userManage' %}">
-					<input type="text" name="delete_user_pin" required id="id_delete_user"
-		                                    placeholder="User PIN" class="form-control" cols="10">
-				    <div>
-				    	<input id="id_create_new_user_button" type="submit" class="btn btn-secondary" value="Delete">
-				    </div> 
-				    {% csrf_token %}		                 
-		        </form>                          
-			</div>
-		</div> -->
-<!-- 	</div>
-</div> -->
 
 {% if "new_user_pin" in response_list and "new_user_name" in response_list %}
 <div class="alert alert-success" role="alert">
-    A new user (Name: {{response_list.new_user_name}}, PIN: {{response_list.new_user_pin}}) is created successfully.
-    <br/>
-    See Detailed Account Info in "List all Current Users".
+    A new user is created successfully:<br/>
+    Name: {{response_list.new_user_name}}<br/>
+    Conversation Role: {{response_list.new_user_role}}<br/>
+    User PIN: {{response_list.new_user_pin}}
+    {% if "new_user_collection_pin" in response_list %}
+    <br/>Collection PIN: {{response_list.new_user_collection_pin}}
+    {% endif %}
 </div>
 {% endif %}
 {% if "delete_user_pin" in response_list %}
@@ -81,8 +95,10 @@
         <th scope="col">User Name</th>
         <th scope="col">User PIN</th>
         <th scope="col">Type</th>
-        <th scope="col">AWS Connect username (agent only)</th>
-        <th scope="col">AWS Connect credentials (agent only)</th>
+        <th scope="col">Collection Request</th>        
+        <th scope="col">AWS Connect username</th>
+        <th scope="col">AWS Connect credentials</th>
+        <th scope="col">Delete User</th>
     </tr>
     </thead>
     <tbody>
@@ -92,17 +108,25 @@
         <td>{{user.PIN}}</td>
         <td>{{user.type}}</td>
         {% if user.type == "agent" %}
-        <td>{{user.account.username}}</td>
-        <td>
-            <button class="btn btn-link"
-                    onclick="toggleButton({{user.PIN}}, this)">Show
-            </button>
-            <a class="alert alert-secondary" style="visibility:hidden;" id="{{user.PIN}}">{{user.account.password}}</a>
-        </td>
+            <td>{{user.account.collectionPIN}} | {{user.account.collectionName}}</td>
+            <td>{{user.account.username}}</td>
+            <td>
+                <button class="btn btn-link"
+                        onclick="toggleButton({{user.PIN}}, this)">Show</button>
+                <a class="alert alert-secondary" style="visibility:hidden;" id="{{user.PIN}}">{{user.account.password}}</a>
+            </td>
         {% else %}
-        <td>-</td>
-        <td>-</td>
+            <td>-</td>  
+            <td>-</td>
+            <td>-</td>
         {% endif %}
+        <td>
+            <form method="post" action="{% url 'userManage' %}">
+                <input type="hidden" name="delete_user_pin" value="{{user.PIN}}">
+                <input id="id_delete_user_{{user.PIN}}" type="submit" class="btn btn-outline-dark" value="Delete">
+                {% csrf_token %}
+            </form>
+        </td>
     </tr>
     {% endfor %}
     </tbody>

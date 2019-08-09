@@ -8,6 +8,7 @@ import logging
 import zipfile
 import boto3
 import aws_deep_sense_spoken_data_collection_framework.utils as utils
+import unittest_helper_methods as helper
 
 # Set up default session for mocking AWS PYTHON SDK (boto3)
 boto3.setup_default_session()
@@ -19,7 +20,7 @@ config_test_path = os.path.join(test_data_directory, 'aws_config_test')
 ACCESS_KEY_ID, ACCESS_KEY = utils.get_aws_access_key(config_test_path)
 AWS_REGION_NAME = utils.get_aws_region_name(config_test_path)
 CALL_RECORDINGS_BUCKET_NAME = utils.get_call_recordings_bucket_name(config_test_path)
-CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_ROUTING_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL = utils.get_connect_info(
+CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL = utils.get_connect_info(
     config_test_path)
 
 
@@ -42,7 +43,6 @@ class TestUtils(unittest.TestCase):
                              'CALL_RECORDINGS_BUCKET_NAME': 'callrecordings_bucket',
                              'CONNECT_INSTANCE_ID': 'test_connect_instance_id',
                              'CONNECT_SECURITY_ID': 'test_connect_security_id',
-                             'CONNECT_ROUTING_ID': 'test_connect_routing_id',
                              'CONNECT_PHONE_NUMBER': 'test_phone_number',
                              'CONNECT_CCP_URL': 'test_ccp_url'
                              }
@@ -66,14 +66,13 @@ class TestUtils(unittest.TestCase):
 
     def test_get_connect_info(self):
         expected_response = (
-            'test_connect_instance_id', 'test_connect_security_id', 'test_connect_routing_id', 'test_phone_number',
-            'test_ccp_url')
+            'test_connect_instance_id', 'test_connect_security_id', 'test_phone_number', 'test_ccp_url')
         actual_response = utils.get_connect_info(config_test_path)
         self.assertEqual(actual_response, expected_response)
 
     @mock_dynamodb2
     def test_is_collection_pin_exists(self):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
         with table.batch_writer() as batch:
@@ -92,7 +91,7 @@ class TestUtils(unittest.TestCase):
 
     @mock_dynamodb2
     def test_is_conversation_pin_exists(self):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
         with table.batch_writer() as batch:
@@ -112,7 +111,7 @@ class TestUtils(unittest.TestCase):
 
     @mock_dynamodb2
     def test_is_user_pin_exists(self):
-        self.create_mock_dynamodb_user_account_table()
+        helper.create_mock_dynamodb_user_account_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.USER_ACCOUNT_DYNAMODB_TABLE)
         with table.batch_writer() as batch:
@@ -132,7 +131,7 @@ class TestUtils(unittest.TestCase):
     @mock_dynamodb2
     @mock.patch('builtins.input', return_value='12345')
     def test_ask_collection_pin(self, input):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
         with table.batch_writer() as batch:
@@ -146,7 +145,7 @@ class TestUtils(unittest.TestCase):
     @mock_dynamodb2
     @mock.patch('builtins.input', return_value='123456')
     def test_ask_user_pin(self, input):
-        self.create_mock_dynamodb_user_account_table()
+        helper.create_mock_dynamodb_user_account_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.USER_ACCOUNT_DYNAMODB_TABLE)
         with table.batch_writer() as batch:
@@ -159,7 +158,7 @@ class TestUtils(unittest.TestCase):
 
     @mock_dynamodb2
     def test_get_contact_ids(self):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
         contact_id_list = ['1', '2', '3']
@@ -179,7 +178,7 @@ class TestUtils(unittest.TestCase):
 
     @mock_dynamodb2
     def test_check_collection_request_mode(self):
-        self.create_mock_dynamodb_collection_session_table()
+        helper.create_mock_dynamodb_collection_session_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
         mode = 'human'
@@ -198,63 +197,23 @@ class TestUtils(unittest.TestCase):
                                                               'invalid_collection_pin')
         self.assertEqual(actual_response, expected_response)
 
-    def create_mock_dynamodb_collection_session_table(self):
-        dynamodb_client = boto3.client('dynamodb', region_name=AWS_REGION_NAME)
-        response = dynamodb_client.create_table(
-            TableName=utils.COLLECTION_REQUEST_DYNAMODB_TABLE,
-            KeySchema=[
-                {
-                    'AttributeName': utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY,
-                    'KeyType': 'HASH'
-                },
-            ],
-            AttributeDefinitions=[
-                {
-                    'AttributeName': utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY,
-                    'AttributeType': 'S'
-                },
-            ],
-            ProvisionedThroughput={
-                'ReadCapacityUnits': 10,
-                'WriteCapacityUnits': 10,
-            },
-            GlobalSecondaryIndexes=[
-                {
-                    'IndexName': utils.COLLECTION_REQUEST_DYNAMODB_SECONDARY_INDEX,
-                    'KeySchema': [
-                        {
-                            'AttributeName': utils.COLLECTION_REQUEST_DYNAMODB_SECONDARY_INDEX_KEY,
-                            'KeyType': 'HASH'
-                        },
-                    ],
-                    'Projection': {
-                        'ProjectionType': 'ALL',
-                    },
-                },
-            ],
-        )
-
-    def create_mock_dynamodb_user_account_table(self):
-        dynamodb_client = boto3.client('dynamodb', region_name=AWS_REGION_NAME)
-        response = dynamodb_client.create_table(
-            TableName=utils.USER_ACCOUNT_DYNAMODB_TABLE,
-            KeySchema=[
-                {
-                    'AttributeName': utils.USER_ACCOUNT_DYNAMODB_TABLE_KEY,
-                    'KeyType': 'HASH'
-                },
-            ],
-            AttributeDefinitions=[
-                {
-                    'AttributeName': utils.USER_ACCOUNT_DYNAMODB_TABLE_KEY,
-                    'AttributeType': 'S'
-                },
-            ],
-            ProvisionedThroughput={
-                'ReadCapacityUnits': 10,
-                'WriteCapacityUnits': 10,
-            },
-        )
+    def test_is_category_choice_valid(self):
+        # Test 1
+        expected_response = False
+        actual_response = utils.is_number_choice_valid('0', 1)
+        self.assertEqual(actual_response, expected_response)
+        # Test 2
+        expected_response = False
+        actual_response = utils.is_number_choice_valid('2', 1)
+        self.assertEqual(actual_response, expected_response)
+        # Test 3
+        expected_response = True
+        actual_response = utils.is_number_choice_valid('1', 1)
+        self.assertEqual(actual_response, expected_response)
+        # Test 4
+        expected_response = False
+        actual_response = utils.is_number_choice_valid('1abc', 100)
+        self.assertEqual(actual_response, expected_response)
 
     def test_ZipFileWithPermission(self):
         sample_executable_zip_path = os.path.join(test_data_directory, 'sample_executable.zip')

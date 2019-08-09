@@ -3,16 +3,42 @@
 {% block content %}
 <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
     <li class="nav-item">
-        <a class="nav-link active" id="pills-home-tab" data-toggle="pill" href="#pills-home" role="tab"
-           aria-controls="pills-home" aria-selected="true">Audio Collection Framework - Work Flow</a>
+        <a class="nav-link active" id="pills-QA-tab" data-toggle="pill" href="#pills-QA" role="tab"
+           aria-controls="pills-QA" aria-selected="true">Questions & Answers</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" id="pills-home-tab" data-toggle="pill" href="#pills-home" role="tab"
+           aria-controls="pills-home" aria-selected="true">Amazon Connect Work Flow</a>
     </li>
     <li class="nav-item">
         <a class="nav-link" id="pills-profile-tab" data-toggle="pill" href="#pills-profile" role="tab"
-           aria-controls="pills-profile" aria-selected="false">Audio Collection Framework - Web Interface</a>
+           aria-controls="pills-profile" aria-selected="false">Web Interface Work Flow</a>
     </li>
 </ul>
 <div class="tab-content" id="pills-tabContent">
-    <div class="tab-pane fade show active" id="pills-home" role="tabpanel" aria-labelledby="pills-home-tab">
+    <div class="tab-pane fade show active" id="pills-QA" role="tabpanel" aria-labelledby="pills-QA-tab">
+        <div class="alert alert-warning" role="alert">
+            Question: What is Audio Collection Framework?
+        </div>
+        <div class="alert alert-primary" role="alert">
+            A framework that collects Human-Human and Human-Bot conversations in spoken/audio form, together with IVR data, on the platform of AWS Connect.
+        </div>
+        <div class="alert alert-warning" role="alert">
+            Question: Where can I find the code package?
+        </div>
+        <div class="alert alert-primary" role="alert">
+            The package is available at: <br>
+            <a href="https://code.amazon.com/packages/AWSDeepSenseSpokenDataCollectionFramework/trees/mainline">https://code.amazon.com/packages/AWSDeepSenseSpokenDataCollectionFramework/trees/mainline</a>
+        </div>
+        <div class="alert alert-warning" role="alert">
+            Question: What services does the framework use?
+        </div>
+        <div class="alert alert-primary" role="alert">
+            The framework uses multiple AWS services, including: <br/>
+            <a href="https://aws.amazon.com/connect/">AWS Connect</a>, <a href="https://aws.amazon.com/lex/">AWS Lex</a>, <a href="https://aws.amazon.com/lambda/">AWS Lambda</a>, <a href="https://aws.amazon.com/dynamodb/">AWS Dynamo DB</a>, <a href="https://aws.amazon.com/s3/">AWS S3</a>, <a href="https://aws.amazon.com/iam/">AWS IAM</a>, <a href="https://aws.amazon.com/kinesis/">AWS Kinesis Video/Data Streams</a>, and <a href="https://aws.amazon.com/transcribe/">AWS Transcribe</a>. <br/>
+        </div>
+    </div>
+    <div class="tab-pane fade" id="pills-home" role="tabpanel" aria-labelledby="pills-home-tab">
         <img src="../../static/image/Amazon Connect Contact Flow.png" class="img-fluid" alt="Responsive image">
     </div>
     <div class="tab-pane fade" id="pills-profile" role="tabpanel" aria-labelledby="pills-profile-tab">

@@ -7,6 +7,7 @@ import boto3
 from moto import mock_dynamodb2
 from aws_deep_sense_spoken_data_collection_framework.user_manager import UserManager
 import aws_deep_sense_spoken_data_collection_framework.utils as utils
+import unittest_helper_methods as helper
 
 # Set up default session for mocking AWS PYTHON SDK (boto3)
 boto3.setup_default_session()
@@ -18,14 +19,11 @@ config_test_path = os.path.join(test_data_directory, 'aws_config_test')
 ACCESS_KEY_ID, ACCESS_KEY = utils.get_aws_access_key(config_test_path)
 AWS_REGION_NAME = utils.get_aws_region_name(config_test_path)
 CALL_RECORDINGS_BUCKET_NAME = utils.get_call_recordings_bucket_name(config_test_path)
-CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_ROUTING_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL = utils.get_connect_info(
-    config_test_path)
+CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL = utils.get_connect_info(config_test_path)
 
 # Create Class Objects
 user_manager = UserManager(config_test_path, ACCESS_KEY_ID, ACCESS_KEY, AWS_REGION_NAME,
-                           CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_ROUTING_ID,
-                           CONNECT_PHONE_NUMBER,
-                           CONNECT_CCP_URL)
+                           CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL)
 user_manager_method_prefix_list = ['aws_deep_sense_spoken_data_collection_framework', 'user_manager', 'UserManager']
 user_manager_method_prefix = '.'.join(user_manager_method_prefix_list)
 
@@ -34,15 +32,27 @@ class TestUserManage(unittest.TestCase):
     user_manager.connect_create_user_account = mock.MagicMock(return_value={'UserId': 'test_id'})
     user_manager.auto_login_portal_given_pin = mock.MagicMock()
 
+    @mock_dynamodb2
     @mock.patch('builtins.input', return_value='N')
     @mock.patch('{}.save2db'.format(user_manager_method_prefix))
     @mock.patch('{}.generate_user_pin'.format(user_manager_method_prefix),
                 return_value='123456')
     def test_create_agent_user(self, input1, input2, input3):
-        agent_name = 'Default Agent Name'
+        helper.create_mock_dynamodb_collection_session_table()
+        dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
+        table = dynamodb_resource.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
+
+        test_agent_name = 'Default Agent Name'
+        test_collection_pin = '98765'
+        test_collection_name = 'test_collection_name'
+        with table.batch_writer() as batch:
+            user_item = {utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: test_collection_pin,
+                         'collectionName': test_collection_name}
+            batch.put_item(Item=user_item)
+
         expected_response = ('123456', {'username': 'agent_123456', 'password': 'Abcd123456', 'userId': 'test_id',
-                                        'phoneNumber': 'test_phone_number', 'url': 'test_ccp_url'})
-        actual_response = user_manager.create_agent_user(agent_name)
+                                        'collectionPIN': test_collection_pin, 'collectionName': test_collection_name})
+        actual_response = user_manager.create_agent_user(test_agent_name, test_collection_pin)
         self.assertEqual(actual_response, expected_response)
 
     @mock.patch('{}.save2db'.format(user_manager_method_prefix))
@@ -55,7 +65,7 @@ class TestUserManage(unittest.TestCase):
 
     @mock_dynamodb2
     def test_save2db(self):
-        self.create_mock_dynamodb_user_account_table()
+        helper.create_mock_dynamodb_user_account_table()
         name = 'test_name'
         user_pin = 'test_user_pin'
         role = 'test_role'
@@ -73,7 +83,7 @@ class TestUserManage(unittest.TestCase):
 
     @mock_dynamodb2
     def test_list_all_user(self):
-        self.create_mock_dynamodb_user_account_table()
+        helper.create_mock_dynamodb_user_account_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.USER_ACCOUNT_DYNAMODB_TABLE)
         with table.batch_writer() as batch:
@@ -90,7 +100,7 @@ class TestUserManage(unittest.TestCase):
 
     @mock_dynamodb2
     def test_check_user_type(self):
-        self.create_mock_dynamodb_user_account_table()
+        helper.create_mock_dynamodb_user_account_table()
         dynamodb_resource = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
         table = dynamodb_resource.Table(utils.USER_ACCOUNT_DYNAMODB_TABLE)
         with table.batch_writer() as batch:
@@ -116,29 +126,6 @@ class TestUserManage(unittest.TestCase):
         expected_response = user_manager.CONNECT_CCP_URL
         actual_response = user_manager.get_URL()
         self.assertEqual(actual_response, expected_response)
-
-    def create_mock_dynamodb_user_account_table(self):
-        dynamodb_client = boto3.client('dynamodb', region_name=AWS_REGION_NAME)
-        response = dynamodb_client.create_table(
-            TableName=utils.USER_ACCOUNT_DYNAMODB_TABLE,
-            KeySchema=[
-                {
-                    'AttributeName': utils.USER_ACCOUNT_DYNAMODB_TABLE_KEY,
-                    'KeyType': 'HASH'
-                },
-            ],
-            AttributeDefinitions=[
-                {
-                    'AttributeName': utils.USER_ACCOUNT_DYNAMODB_TABLE_KEY,
-                    'AttributeType': 'S'
-                },
-            ],
-            ProvisionedThroughput={
-                'ReadCapacityUnits': 10,
-                'WriteCapacityUnits': 10,
-            },
-        )
-
 
 if __name__ == '__main__':
     unittest.main()

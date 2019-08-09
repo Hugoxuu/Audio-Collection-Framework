@@ -1,12 +1,17 @@
 """
-Store Lex Bot States and conversation results into Dynamo DB
-
+store_lex_conversation.py:
+1. Code hook function of lex bot:
+    In the real time of human/bot conversation, store Lex Bot States and conversation results into Dynamo DB
+2. Completion function of a conversation:
+    After the human/bot conversation is done, amazon connect will call this function to combine all previous saved
+    lex bot states and append the conversation result into a new json file to S3
 """
 
 import json
 import boto3
 import os
 import datetime
+import logging
 
 s3_resource = boto3.resource('s3')
 s3_client = boto3.client('s3')
@@ -26,7 +31,8 @@ def combine_bot_state_to_s3(event, current_time):
     else:
         num_bot_state = 0
 
-    json_dict = {'conversationResult': conversation_result, 'conversationHistory': [], 'finishedTimestamp': current_time}
+    json_dict = {'conversationResult': conversation_result, 'conversationHistory': [],
+                 'finishedTimestamp': current_time}
     for sequence_number in range(num_bot_state):
         object_key = '{}_{}'.format(key_prefix, sequence_number)
         s3_object = s3_client.get_object(Bucket=CALL_RECORDINGS_BUCKET_NAME, Key=object_key)
@@ -34,7 +40,6 @@ def combine_bot_state_to_s3(event, current_time):
         json_object = json.loads(object_content)
         json_dict['conversationHistory'].append(json_object)
         s3_resource.Object(CALL_RECORDINGS_BUCKET_NAME, object_key).delete()
-
 
     object_key = '{}.json'.format(key_prefix)
     s3_object = s3_resource.Object(CALL_RECORDINGS_BUCKET_NAME, object_key)
@@ -61,9 +66,14 @@ def save_bot_state_to_s3(event, current_time):
 
 
 def lambda_handler(event, context):
+    """
+    The caller function of the lambda function
+    :param event: event-specified information, type: dict
+    :param context: context information (Not used)
+    :return: response dict
+    """
+    logging.info(event)
     current_time = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-    print(current_time)
-    print(event)
     is_conversation_result = 'Details' in event
     if is_conversation_result:
         combine_bot_state_to_s3(event, current_time)
@@ -79,4 +89,5 @@ def lambda_handler(event, context):
                 'slots': event['currentIntent']['slots']
             }
         }
+    logging.info(response)
     return response

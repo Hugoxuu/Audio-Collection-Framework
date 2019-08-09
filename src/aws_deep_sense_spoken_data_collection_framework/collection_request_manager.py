@@ -1,4 +1,5 @@
 import logging
+import random
 import boto3
 import aws_deep_sense_spoken_data_collection_framework.utils as utils
 from aws_deep_sense_spoken_data_collection_framework.call_recordings_manager import CallRecordingsManager
@@ -20,9 +21,10 @@ class CollectionRequestManager:
         self.ACCESS_KEY_ID = ACCESS_KEY_ID
         self.ACCESS_KEY = ACCESS_KEY
         self.AWS_REGION_NAME = AWS_REGION_NAME
-
         self.call_recordings_manage = CallRecordingsManager(self.ACCESS_KEY_ID, self.ACCESS_KEY, self.AWS_REGION_NAME,
                                                             CALL_RECORDINGS_BUCKET_NAME)
+        self.num_digit_collection_pin = 5
+        self.num_digit_conversation_pin = 5
         self.dynamodb = boto3.resource('dynamodb', region_name=self.AWS_REGION_NAME,
                                        aws_access_key_id=self.ACCESS_KEY_ID,
                                        aws_secret_access_key=self.ACCESS_KEY)
@@ -33,41 +35,80 @@ class CollectionRequestManager:
 
         """
         try:
-            collection_pin = self.generate_collection_pin()
-            conversation_pin = self.generate_conversation_pin()
+            collection_name = self.ask_collection_name()
             is_human_to_human = self.ask_collection_mode()
             collection_goal = self.ask_collection_goal()
-            collection_status = 'START'
             if is_human_to_human:
                 mode = 'human'
-                category_info = self.ask_collection_category()
-                self.save2db(collection_pin, conversation_pin, mode, category_info, collection_goal, collection_status)
-                self.collection_request_printer(collection_pin, conversation_pin, mode,
-                                                category_info['collectionCategory'], collection_goal, collection_status)
+                if self.get_num_available_queue() == 0:
+                    logging.error('Error: No available queue found.')
+                else:
+                    self.generate_collection_request_given_info(mode, None, collection_goal, collection_name)
             else:
                 mode = 'bot'
                 bot_info = self.ask_collection_bot()
-                self.save2db(collection_pin, conversation_pin, mode, bot_info, collection_goal, collection_status)
-                self.collection_request_printer(collection_pin, conversation_pin, mode, bot_info['collectionBot'],
-                                                collection_goal, collection_status)
+                self.generate_collection_request_given_info(mode, bot_info, collection_goal, collection_name)
         except Exception as e:
             logging.error('Error: {}'.format(e))
         return
 
-    def generate_collection_request_given_info(self, mode, collection_category, collection_goal):
+    def generate_collection_request_given_info(self, mode, collection_bot, collection_goal, collection_name):
+        """
+
+        :param mode: collection request mode (human2human | human2bot)
+        :param collection_bot: lex bot for collection request
+        :param collection_goal: number of conversations to be collected in this collection request
+        :param collection_name: collection request name
+        :return: collection request pin and conversation pin
+        """
         collection_pin = self.generate_collection_pin()
         conversation_pin = self.generate_conversation_pin()
         collection_status = 'START'
         if mode == 'human':
-            table = self.dynamodb.Table('collectionCategory')
-            session = table.get_item(Key={"category": str(collection_category)})
-            queue_arn = session['Item']['queueArn']
-            category_info = {'collectionCategory': collection_category, 'queueArn': queue_arn}
-            self.save2db(collection_pin, conversation_pin, mode, category_info, collection_goal, collection_status)
+            routing_info = {'routingInfo': self.get_routing_info()}
+            if 'error' in routing_info['routingInfo']:
+                return '', ''
+            self.save2db(collection_pin, conversation_pin, mode, routing_info, collection_goal, collection_status,
+                         collection_name)
+            self.collection_request_printer(collection_pin, conversation_pin, mode,
+                                            None, collection_goal, collection_status,
+                                            collection_name, [])
         elif mode == 'bot':
-            bot_info = {'collectionBot': collection_category}
-            self.save2db(collection_pin, conversation_pin, mode, bot_info, collection_goal, collection_status)
+            bot_info = {'collectionBot': collection_bot}
+            self.save2db(collection_pin, conversation_pin, mode, bot_info, collection_goal, collection_status,
+                         collection_name)
+            self.collection_request_printer(collection_pin, conversation_pin, mode, bot_info['collectionBot'],
+                                            collection_goal, collection_status, collection_name, [])
         return collection_pin, conversation_pin
+
+    def get_routing_info(self):
+        """
+        Retrieve an available queue from the queue pool
+        :return: routing information, including queue id, and routing profile id
+        """
+        table = self.dynamodb.Table('connectQueuePool')
+        available_queue = table.scan(ProjectionExpression='queueNumber')
+        num_available_queue = len(available_queue)
+        if num_available_queue == 0:
+            logging.error('Error: No available queue found.')
+            return {'error': 'No available queue found.'}
+        queue_number = random.choice(available_queue['Items'])['queueNumber']
+        queue_item = table.get_item(Key={'queueNumber': queue_number})['Item']
+        table.delete_item(
+            Key={
+                'queueNumber': queue_number
+            }
+        )
+        return queue_item
+
+    def get_num_available_queue(self):
+        """
+        Get number of available queues for human/human collection
+        :return: number of available queues
+        """
+        table = self.dynamodb.Table('connectQueuePool')
+        available_queue = table.scan(ProjectionExpression='queueNumber')['Items']
+        return len(available_queue)
 
     def generate_collection_pin(self):
         """
@@ -75,10 +116,9 @@ class CollectionRequestManager:
 
         :return: generated 5-digit PIN collection request PIN code
         """
-        num_digit = 5
-        PIN = utils.random_with_n_digits(num_digit)
+        PIN = utils.random_with_n_digits(self.num_digit_collection_pin)
         while utils.is_collection_pin_exists(self.ACCESS_KEY_ID, self.ACCESS_KEY, self.AWS_REGION_NAME, PIN):
-            PIN = utils.random_with_n_digits(num_digit)
+            PIN = utils.random_with_n_digits(self.num_digit_collection_pin)
         return PIN
 
     def generate_conversation_pin(self):
@@ -87,13 +127,23 @@ class CollectionRequestManager:
 
         :return: generated 5-digit PIN conversation PIN code
         """
-        num_digit = 5
-        PIN = utils.random_with_n_digits(num_digit)
+        PIN = utils.random_with_n_digits(self.num_digit_conversation_pin)
         while utils.is_conversation_pin_exists(self.ACCESS_KEY_ID, self.ACCESS_KEY, self.AWS_REGION_NAME, PIN):
-            PIN = utils.random_with_n_digits(num_digit)
+            PIN = utils.random_with_n_digits(self.num_digit_conversation_pin)
         return PIN
 
-    def ask_collection_mode(self):
+    @staticmethod
+    def ask_collection_name():
+        """
+        Ask the user for the collection request name
+        """
+        name = input('Collection Request Name (blank for default name): ')
+        if len(name) == 0:
+            name = 'Default Collection Request Name'
+        return name
+
+    @staticmethod
+    def ask_collection_mode():
         """
         Ask the user for the desired collection mode
 
@@ -104,7 +154,8 @@ class CollectionRequestManager:
         print('Human/Bot - Enter 2')
         mode_num = 2
         choice = input('Your choice: ')
-        while not self.is_number_choice_valid(choice, mode_num):
+
+        while not utils.is_number_choice_valid(choice, mode_num):
             choice = input('Invalid input. Your choice: ')
         if choice == '1':
             return True
@@ -112,25 +163,6 @@ class CollectionRequestManager:
             return False
         else:
             raise ValueError  # Should not reach here normally
-
-    def ask_collection_category(self):
-        """
-        Ask the user for the desired collection category
-
-        :return: the user-selected collection category, along with the corresponding queue ARN
-        """
-        table = self.dynamodb.Table('collectionCategory')
-        session_list = table.scan()['Items']
-        print('Please choose among the following categories:')
-        for index, item in enumerate(session_list, start=1):
-            print('{} - Enter {}'.format(item['category'], index))
-        choice = input('Your choice: ')
-        while not self.is_number_choice_valid(choice, len(session_list)):
-            choice = input('Invalid input. Your choice: ')
-        choice_index = int(choice) - 1
-        collection_category = session_list[choice_index]['category']
-        queue_arn = session_list[choice_index]['queueArn']
-        return {'collectionCategory': collection_category, 'queueArn': queue_arn}
 
     def ask_collection_bot(self):
         """
@@ -144,33 +176,34 @@ class CollectionRequestManager:
         for index, item in enumerate(session_list, start=1):
             print('{} - Enter {}'.format(item['bot'], index))
         choice = input('Your choice: ')
-        while not self.is_number_choice_valid(choice, len(session_list)):
+
+        while not utils.is_number_choice_valid(choice, len(session_list)):
             choice = input('Invalid input. Your choice: ')
         choice_index = int(choice) - 1
         collection_bot = session_list[choice_index]['bot']
-        return {'collectionBot': collection_bot}
+        return collection_bot
 
-    def get_available_collection_category(self):
+    def get_available_collection_bot(self):
         try:
-            category_table = self.dynamodb.Table('collectionCategory')
-            category_list = category_table.scan()['Items']
             bot_table = self.dynamodb.Table('collectionBot')
             bot_list = bot_table.scan()['Items']
-            return category_list, bot_list
+            return bot_list
         except Exception as e:
-            logging.error('Cannot get available collection category information from DynamoDB, error: {}'.format(e))
-            return [], []
+            logging.error('Cannot get available collection bot information from DynamoDB, error: {}'.format(e))
+            return []
 
-    def save2db(self, collection_pin, conversation_pin, mode, collection_choice, collection_goal, collection_status):
+    def save2db(self, collection_pin, conversation_pin, mode, collection_info, collection_goal, collection_status,
+                collection_name):
         """
         Save the collection request information into Dynamo DB
 
         :param collection_pin: collection request PIN
         :param conversation_pin: conversation PIN
-        :param collection_choice: collection request category
+        :param collection_info: human2human: routing info | human2bot: collection bot name
         :param mode: collection request mode
         :param collection_goal: number of conversations to be collected in this collection request
         :param collection_status: START | PAUSE | STOP
+        :param collection_name: collection request name
 
         """
         table = self.dynamodb.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
@@ -178,8 +211,8 @@ class CollectionRequestManager:
             collection_item = {utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: collection_pin,
                                utils.COLLECTION_REQUEST_DYNAMODB_SECONDARY_INDEX_KEY: conversation_pin, 'mode': mode,
                                'contactIDs': [], 'collectionGoal': collection_goal,
-                               'collectionStatus': collection_status}
-            collection_item.update(collection_choice)
+                               'collectionStatus': collection_status, 'collectionName': collection_name}
+            collection_item.update(collection_info)
             batch.put_item(Item=collection_item)
         return
 
@@ -193,7 +226,8 @@ class CollectionRequestManager:
         if 'error' not in response:
             self.collection_request_printer(response['collection_pin'], response['conversation_pin'], response['mode'],
                                             response['collection_info'], response['collection_goal'],
-                                            response['collection_status'])
+                                            response['collection_status'], response['collection_name'],
+                                            response['contact_ids'])
         else:
             logging.error(response['error'])
         return
@@ -208,16 +242,18 @@ class CollectionRequestManager:
             mode = session['Item']['mode']
             collection_info = ''
             if mode == 'human':
-                collection_info = session['Item']['collectionCategory']
+                collection_info = None
             elif mode == 'bot':
                 collection_info = session['Item']['collectionBot']
             contact_ids = session['Item']['contactIDs']
             collection_goal = session['Item']['collectionGoal']
             collection_status = session['Item']['collectionStatus']
+            collection_name = session['Item']['collectionName']
 
             response = {'collection_pin': collection_pin, 'conversation_pin': conversation_pin, 'mode': mode,
                         'collection_info': collection_info, 'contact_ids': contact_ids,
-                        'collection_goal': collection_goal, 'collectionStatus': collection_status}
+                        'collection_goal': collection_goal, 'collection_status': collection_status,
+                        'collection_name': collection_name}
         else:
             response = {'error': 'Error: Invalid Collection PIN or No session information was found.'}
         return response
@@ -237,74 +273,21 @@ class CollectionRequestManager:
             mode = item['mode']
             collection_goal = item['collectionGoal']
             collection_status = item['collectionStatus']
-            collection_info = ''
-            if mode == 'human':
-                collection_info = item['collectionCategory']
-            elif mode == 'bot':
-                collection_info = item['collectionBot']
-
-            logging.info(
-                'Collection PIN: {}, conversation PIN: {}, mode: {}, category: {}, collection progress: {}/{}, collection status: {}.'.format(
-                    collection_pin, conversation_pin, mode, collection_info, len(contact_ids), collection_goal,
-                    collection_status))
+            collection_name = item['collectionName']
+            collection_bot = None
+            if mode == 'bot':
+                collection_bot = item['collectionBot']
+                logging.info(
+                    'Collection Name: {}, Collection PIN: {}, conversation PIN: {}, mode: {}, collection bot: {}, collection progress: {}/{}, collection status: {}.'.format(
+                        collection_name, collection_pin, conversation_pin, mode, collection_bot, len(contact_ids),
+                        collection_goal, collection_status))
+            else:
+                logging.info(
+                    'Collection Name: {}, Collection PIN: {}, conversation PIN: {}, mode: {}, collection progress: {}/{}, collection status: {}.'.format(
+                        collection_name, collection_pin, conversation_pin, mode, len(contact_ids),
+                        collection_goal, collection_status))
         logging.info('All sessions are listed.')
         return collection_request_list
-
-    def end_collect_request(self):
-        """
-        End a collection session by deleting all related information on Amazon Connect, AWS Dynamo DB, and AWS S3
-
-        """
-        collection_pin = utils.ask_collection_pin(self.ACCESS_KEY_ID, self.ACCESS_KEY, self.AWS_REGION_NAME)
-        # Ask the user to confirm
-        decision = input(
-            'Are you sure to end this conversation session? Y/N | ')
-        if decision != 'Y' and decision != 'y':
-            return
-
-        self.end_request_given_pin(collection_pin)
-        return
-
-    def end_request_given_pin(self, collection_pin):
-        """
-        End the collection request given a PIN code
-
-        :param collection_pin: collection request PIN
-        """
-        # Get user id info in AWS Dynamo DB
-        collection_request_table = self.dynamodb.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
-        try:
-            # Delete call recordings in AWS S3
-            self.call_recordings_manage.delete_call_recordings_given_pin(collection_pin)
-        except:
-            logging.error('Error: Cannot delete call recordings in S3')
-        try:
-            # Delete request information in AWS Dynamo DB
-            collection_request_table.delete_item(Key={"collectionPIN": collection_pin})
-        except:
-            logging.error('Error: Cannot delete collect request information in AWS Dynamo DB')
-        logging.info('Collect request {} is ended.'.format(collection_pin))
-        return
-
-    def end_all_collect_requests(self):
-        """
-        End all conversation requests in the AWS account
-
-        """
-        # Ask the user to confirm
-        decision = input(
-            'Are you sure to end all your collect requests? Y/N | ')
-        if decision != 'Y' and decision != 'y':
-            return
-        # Get all requests from the table
-        table = self.dynamodb.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
-        session_list = table.scan()['Items']
-        for item in session_list:
-            PIN = item[utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY]
-            self.end_request_given_pin(PIN)
-
-        logging.info('All collect requests are ended.')
-        return
 
     def change_collection_status(self):
         """
@@ -357,39 +340,29 @@ class CollectionRequestManager:
         return int(collection_goal)
 
     @staticmethod
-    def is_number_choice_valid(choice, category_num):
-        """
-        Check if a user-input index selection is valid
-
-        :param choice: user-input choice
-        :param category_num: number of total available choices
-        :return: if the user-input choice is valid
-        """
-        try:
-            choice_index = int(choice) - 1
-            if choice_index < 0 or choice_index >= category_num:
-                raise ValueError
-        except ValueError:
-            return False
-        return True
-
-    @staticmethod
-    def collection_request_printer(collection_pin, conversation_pin, mode, collection_info, collection_goal,
-                                   collection_status):
+    def collection_request_printer(collection_pin, conversation_pin, mode, collection_bot, collection_goal,
+                                   collection_status, collection_name, contact_ids):
         """
         Print out the information of collection request
 
         :param collection_pin: collection request PIN
         :param conversation_pin: conversation PIN
         :param mode: collection mode
-        :param collection_info: collection request information
+        :param collection_bot: collection request bot for human/bot mode
+        :param collection_name: collection request name
+        :param contact_ids: list of contact ids (each one represents one conversation)
         """
         logging.info(
             'Your collect request is shown below, please keep the collection request information in a safe place:')
+        logging.info('Collection Request Name: {}'.format(collection_name))
         logging.info('Collection PIN code (Please use it for collecting call recordings): {}'.format(collection_pin))
         logging.info('Conversation PIN code (Please use it for making a conversation): {}'.format(conversation_pin))
         logging.info('Collection Mode: {}'.format(mode))
         logging.info('Collection Goal: {}'.format(collection_goal))
         logging.info('Collection Status: {}'.format(collection_status))
-        logging.info('Collection Information: {}'.format(collection_info))
+        if collection_bot is not None:
+            logging.info('Collection Bot: {}'.format(collection_bot))
+        logging.info('Collected Conversation:')
+        for contact_id in contact_ids:
+            logging.info('- Contact ID: {}'.format(contact_id))
         return

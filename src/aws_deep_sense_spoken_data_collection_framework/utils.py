@@ -7,14 +7,12 @@ import os
 from random import randint
 from zipfile import ZipFile, ZipInfo
 
-
 ACCESS_KEY_ID__CONFIG_KEY = 'AWS_ACCESS_KEY_ID'
 ACCESS_KEY__CONFIG_KEY = 'AWS_ACCESS_KEY'
 AWS_REGION_NAME__CONFIG_KEY = 'AWS_REGION_NAME'
 CALL_RECORDINGS_BUCKET_NAME__CONFIG_KEY = 'CALL_RECORDINGS_BUCKET_NAME'
 CONNECT_INSTANCE_ID__CONFIG_KEY = 'CONNECT_INSTANCE_ID'
 CONNECT_SECURITY_ID__CONFIG_KEY = 'CONNECT_SECURITY_ID'
-CONNECT_ROUTING_ID__CONFIG_KEY = 'CONNECT_ROUTING_ID'
 CONNECT_PHONE_NUMBER__CONFIG_KEY = 'CONNECT_PHONE_NUMBER'
 CONNECT_CCP_URL__CONFIG_KEY = 'CONNECT_CCP_URL'
 
@@ -24,6 +22,7 @@ COLLECTION_REQUEST_DYNAMODB_SECONDARY_INDEX = 'conversationPIN-index'
 COLLECTION_REQUEST_DYNAMODB_SECONDARY_INDEX_KEY = 'conversationPIN'
 USER_ACCOUNT_DYNAMODB_TABLE = 'userAccount'
 USER_ACCOUNT_DYNAMODB_TABLE_KEY = 'PIN'
+
 
 def parse_config(config_file):
     """
@@ -76,10 +75,9 @@ def get_connect_info(config_file):
     config_dict = parse_config(config_file)
     CONNECT_INSTANCE_ID = config_dict[CONNECT_INSTANCE_ID__CONFIG_KEY]
     CONNECT_SECURITY_ID = config_dict[CONNECT_SECURITY_ID__CONFIG_KEY]
-    CONNECT_ROUTING_ID = config_dict[CONNECT_ROUTING_ID__CONFIG_KEY]
     CONNECT_PHONE_NUMBER = config_dict[CONNECT_PHONE_NUMBER__CONFIG_KEY]
     CONNECT_CCP_URL = config_dict[CONNECT_CCP_URL__CONFIG_KEY]
-    return CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_ROUTING_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL
+    return CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL
 
 
 def get_aws_region_name(config_file):
@@ -236,6 +234,23 @@ def check_collection_request_mode(ACCESS_KEY_ID, ACCESS_KEY, AWS_REGION_NAME, co
     if 'Item' in session:
         mode = session['Item']['mode']
     return mode
+
+
+def is_number_choice_valid(choice, category_num):
+    """
+    Check if a user-input index selection is valid
+
+    :param choice: user-input choice
+    :param category_num: number of total available choices
+    :return: if the user-input choice is valid
+    """
+    try:
+        choice_index = int(choice) - 1
+        if choice_index < 0 or choice_index >= category_num:
+            raise ValueError
+    except ValueError:
+        return False
+    return True
 
 
 # Subclassing ZipFile and Changing extract() Use to unzip file without corrupting the file permission

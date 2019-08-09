@@ -57,6 +57,7 @@ Feature Support:
     * Call recordings (Audio file, lex-bot state file)
     * CTR Metadata (Contact Trace Records)
     * Report for collection requests and conversations
+
 ## Details
 1. **aws_deep_sense_spoken_data_collection_framework/framework_runner.py**  
     Please use the framework by running this module.  
@@ -66,7 +67,8 @@ Feature Support:
     * Collect call recordings (audio file & meta info) from AWS S3 (PIN code required)
     * Delete call recordings on AWS S3 (PIN code required)
     * Preprocess call recordings (e.g. split the audio file by channel)
-    * Apply and download machine transcribe to call recordings on AWS S3 (PIN code required)
+    * Apply and download machine transcribe to call recordings on AWS S3 (PIN code required)  
+    Unit tests for this module can be found at **aws_deep_sense_spoken_data_collection_framework/test/test_call_recordings_manage.py** 
 3. **aws_deep_sense_spoken_data_collection_framework/conversation_manage.py**  
     This module manages the conversation sessions on Amazon Connect and relevant conversation information stored in AWS Dynamo DB, including: 
     * Create a new conversation session, providing:   
@@ -81,8 +83,9 @@ Feature Support:
         * Delete call recordings in AWS S3
         * Delete session information in AWS Dynamo DB
         * Delete user account in Amazon Connect
-    * End all Collection Requests, free up all resources
-4. **aws_deep_sense_spoken_data_collection_framework/user_manage.py**
+    * End all Collection Requests, free up all resources  
+    Unit tests for this module can be found at **aws_deep_sense_spoken_data_collection_framework/test/test_conversation_manage.py** 
+4. **aws_deep_sense_spoken_data_collection_framework/user_manage.py**  
     This module manages the user account as conversation roles on Amazon Connect and relevant user information stored in AWS Dynamo DB, including:
     * Create a new user as conversation role, providing:
         * Select between customer and agent conversation role for the user created
@@ -97,7 +100,8 @@ Feature Support:
     * Delete all existing users
     * Open Amazon Connect Contact Center Portal (PIN code required) for an agent-role user, providing:
         * Open a Chrome browser popup window
-        * Retrieve the user account, and auto-login the contact center portal (CCP)
+        * Retrieve the user account, and auto-login the contact center portal (CCP)  
+    Unit tests for this module can be found at **aws_deep_sense_spoken_data_collection_framework/test/test_user_manage.py** 
 5. **aws_deep_sense_spoken_data_collection_framework/utils.py**  
     This module provides common methods that will be used among other modules, including:
     * Get parameter from 'aws_config' file, including:
@@ -107,23 +111,22 @@ Feature Support:
     * Methods about PIN, including:
         * Ask for a valid PIN
         * Check if a PIN exists
-    * Query information stored in AWS Dynamo DB
+    * Query information stored in AWS Dynamo DB  
+    Unit tests for this module can be found at **aws_deep_sense_spoken_data_collection_framework/test/test_utils.py** 
 6. **aws_deep_sense_spoken_data_collection_framework/AWS_lambda_functions.py**  
     This module is not directly run by the framework. It is deployed on AWS and will be called during the conversation.   
-7. **aws_deep_sense_spoken_data_collection_framework/test/test_framework_runner.py**  
-    This module contains multiple unit tests for testing the modules above.
-8. **aws_deep_sense_spoken_data_collection_framework/configurations/aws_config**
+7. **aws_deep_sense_spoken_data_collection_framework/configurations/aws_config**  
     This file is a configuration file of the AWS Infrastructure that the platform will be used upon. It is in format of key-pair to store important AWS credentials and parameters.  
     * ACCESS_KEY_ID, ACCESS_KEY: AWS account credentials
     * BUCKET_NAME: AWS S3 Bucket Name for retrieving call recordings
     * CONNECT_INSTANCE_ID: AWS Connect Instance ID
     * CONNECT_SECURITY_ID: AWS Connect Default Security Profile ID for Agent User Account
     * CONNECT_ROUTING_ID: AWS Connect Routing Profile ID
-9. **ivrFrameworkWebInterface/views.py**
+8. **ivrFrameworkWebInterface/views.py**  
     This file consists of groups of individual functions that take a Web request and returns a Web response.
-10. **ivrFrameworkWebInterface/templates/\*.html**
+9. **ivrFrameworkWebInterface/templates/\*.html**  
     Template HTML files that will be filled and converted into final HTML page shown to the user by Django view-controller.
-11. **ivrFrameworkWebInterface/static/\*file**
+10. **ivrFrameworkWebInterface/static/\*file**  
     Static files for the web interface to use, including image files, downloadable files, and CSS files.
 
 

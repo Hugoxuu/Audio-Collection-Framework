@@ -17,16 +17,17 @@ from zipfile import ZipFile
 from aws_deep_sense_spoken_data_collection_framework import call_recordings_manager, collection_request_manager, \
     user_manager, utils
 
+# Change to your desired configuration file
 config_path = os.path.join('..', '..', 'configurations', 'aws_config_isengard')
 
 ACCESS_KEY_ID, ACCESS_KEY = utils.get_aws_access_key(config_path)
 AWS_REGION_NAME = utils.get_aws_region_name(config_path)
 CALL_RECORDINGS_BUCKET_NAME = utils.get_call_recordings_bucket_name(config_path)
-CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_ROUTING_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL = utils.get_connect_info(
-    config_path)
+
+CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL = utils.get_connect_info(config_path)
 
 user_manager = user_manager.UserManager(config_path, ACCESS_KEY_ID, ACCESS_KEY, AWS_REGION_NAME,
-                                        CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_ROUTING_ID,
+                                        CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID,
                                         CONNECT_PHONE_NUMBER, CONNECT_CCP_URL)
 collection_request_manager = collection_request_manager.CollectionRequestManager(ACCESS_KEY_ID, ACCESS_KEY,
                                                                                  AWS_REGION_NAME,
@@ -98,9 +99,19 @@ def user_manage_action(request):
             role = request.POST['new_user_role']
             name = request.POST['new_user_name']
             if role == 'customer' or role == 'agent':
-                user_pin, user_account = user_manager.create_user_given_info(role, name)
-                response_list['new_user_pin'] = user_pin
-                response_list['new_user_name'] = name
+                if role == 'customer':
+                    user_pin, user_account = user_manager.create_user_given_info(role, name, '')
+                elif role == 'agent':
+                    collection_pin = request.POST['new_user_collection_pin']
+                    if collection_pin == 'not_selected':
+                        error_list.append('Invalid collection request input.')
+                    else:
+                        user_pin, user_account = user_manager.create_user_given_info(role, name, collection_pin)
+                        response_list['new_user_collection_pin'] = collection_pin
+                if len(error_list) == 0:
+                    response_list['new_user_role'] = role
+                    response_list['new_user_pin'] = user_pin
+                    response_list['new_user_name'] = name
             else:
                 error_list.append('Invalid user role input.')
         if 'delete_user_pin' in request.POST:
@@ -115,6 +126,7 @@ def user_manage_action(request):
         context['error_list'] = error_list
         context['response_list'] = response_list
 
+    context['collection_request_list'] = user_manager.list_collection_request_option()
     context['user_list'] = user_manager.list_all_user()
     context['amazon_connect_phone_number'] = user_manager.get_phone_number()
     context['amazon_connect_ccp_link'] = user_manager.get_URL()
@@ -127,23 +139,23 @@ def collection_request_action(request):
     error_list = []
 
     if request.method == 'POST':
-        if (
-                'new_human2human_collection_category' in request.POST and 'human2human_collection_goal' in request.POST) or (
-                'new_human2bot_collection_category' in request.POST and 'human2bot_collection_goal' in request.POST):
-            category = ''
-            if 'new_human2human_collection_category' in request.POST:
-                category = request.POST['new_human2human_collection_category']
-                mode = 'human'
+        if ('human2human_collection_name' in request.POST and 'human2human_collection_goal' in request.POST) or (
+                'human2bot_collection_name' in request.POST and 'new_human2bot_collection_category' in request.POST and 'human2bot_collection_goal' in request.POST):
+
+            collection_bot = ''
+            mode = 'human'
             if 'new_human2bot_collection_category' in request.POST:
-                category = request.POST['new_human2bot_collection_category']
+                collection_bot = request.POST['new_human2bot_collection_category']
                 mode = 'bot'
 
             new_collection_request = {}
-            if category != 'Choose...':
-                new_collection_request['category'] = category
-            else:
-                error_list.append('Invalid Collection Category.')
+            if mode == 'bot':
+                if collection_bot != 'Choose a bot...':
+                    new_collection_request['collection_bot'] = collection_bot
+                else:
+                    error_list.append('Invalid Collection Category.')
 
+            collection_goal = -1
             if 'human2human_collection_goal' in request.POST:
                 collection_goal = parse_positive_int_without_exception(request.POST['human2human_collection_goal'])
                 if collection_goal > 0:
@@ -158,14 +170,21 @@ def collection_request_action(request):
                 else:
                     error_list.append('Invalid Collection Goal.')
 
+            collection_name = ''
+            if 'human2human_collection_name' in request.POST:
+                collection_name = request.POST['human2human_collection_name']
+            if 'human2bot_collection_name' in request.POST:
+                collection_name = request.POST['human2bot_collection_name']
+            if len(collection_name) == 0:
+                collection_name = 'Default Collection Request Name'
+
             if len(error_list) == 0:
                 collection_pin, conversation_pin = collection_request_manager.generate_collection_request_given_info(
-                    mode, category, collection_goal)
+                    mode, collection_bot, collection_goal, collection_name)
                 new_collection_request.update(
-                    {'collection_pin': collection_pin, 'conversation_pin': conversation_pin, 'mode': mode})
+                    {'collection_pin': collection_pin, 'conversation_pin': conversation_pin, 'mode': mode,
+                     'collection_name': collection_name})
                 context['new_collection_request'] = new_collection_request
-
-
         elif 'get_collection_pin' in request.POST:
             collection_pin = request.POST['get_collection_pin']
             get_collection_pin_response = collection_request_manager.get_collection_request_given_pin(collection_pin)
@@ -182,11 +201,10 @@ def collection_request_action(request):
                 get_collection_pin_response['contact_ids'] = contact_ids_transcribe_status
             context['get_collection_pin_response'] = get_collection_pin_response
 
-    category_list, bot_list = collection_request_manager.get_available_collection_category()
-    context['category_list'] = category_list
+    bot_list = collection_request_manager.get_available_collection_bot()
     context['bot_list'] = bot_list
-    collection_request_list = collection_request_manager.list_collect_requests()
-    context['collection_request_list'] = collection_request_list
+    context['collection_request_list'] = collection_request_manager.list_collect_requests()
+    context['num_available_queue'] = collection_request_manager.get_num_available_queue()
 
     context['error_list'] = error_list
     return render(request, 'ivrFrameworkWebInterface/collection_request.html', context)
@@ -198,7 +216,8 @@ def download_call_recordings(request):
         return
 
     collection_pin = request.POST['collectionPIN']
-    static_file_path = '/Users/xuzeyuan/Desktop/ivr-framework/src/AWSDeepSenseSpokenDataCollectionFramework/src/ivrFrameworkWebInterface/ivrFrameworkWebInterface/static/callRecordings'
+    static_file_path = os.path.join('ivrFrameworkWebInterface','static', 'callRecordings')
+
     output_file_path = os.path.join(static_file_path, collection_pin)
     call_recordings_manager.download_call_recordings_given_pin(collection_pin, output_file_path)
 

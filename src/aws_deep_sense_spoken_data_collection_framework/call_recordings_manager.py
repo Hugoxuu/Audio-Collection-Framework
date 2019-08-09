@@ -242,7 +242,7 @@ class CallRecordingsManager:
         :param pin: collection request PIN for the convenience of naming file path
         :return: the final file path
         """
-        default_path = os.path.join(os.getcwd(), 'file')
+        default_path = os.path.join(os.getcwd(), 'audio_file')
         file_path = input('Enter Output File Directory (blank for {}): '.format(default_path))
         if len(file_path) == 0 or not os.path.exists(file_path):  # Default Setting
             file_path = os.path.join(default_path, pin)
@@ -382,7 +382,7 @@ class CallRecordingsManager:
 
             collection_type = ''
             if mode == 'human':
-                collection_type = item['collectionCategory']
+                collection_type = item['routingInfo']
             elif mode == 'bot':
                 collection_type = item['collectionBot']
 

@@ -1,12 +1,16 @@
-# check_pin_code_lambda.py: This module is not directly run by the framework.
-#                           It is deployed on AWS and will be called during the conversation.
-#                           This module is to check if a PIN code, which entered by a customer,
-#                           is valid, by querying AWS Dynamo DB.
+"""
+check_pin_code.py:
+This module is not directly run by the framework.
+It is deployed on AWS and will be called during the conversation.
+This module is to check if a PIN code, which entered by a customer, is valid, by querying AWS Dynamo DB.
+
+"""
 
 import os
 import json
 import boto3
 from boto3.dynamodb.conditions import Key
+import logging
 
 AWS_REGION_NAME = os.environ['AWS_REGION_NAME']
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION_NAME)
@@ -53,8 +57,8 @@ def check_conversation_pin(conversation_pin, event):
 
         # Get queue Arn for Human/Human Conversation
         if mode == HUMAN2HUMAN_MODE:
-            queue_arn = session['Item']['queueArn']
-            response['queueArn'] = queue_arn
+            queue_id = session['Item']['routingInfo']['queueID']
+            response['queueID'] = queue_id
         elif mode == HUMAN2BOT_MODE:
             bot = session['Item']['collectionBot']
             response['bot'] = bot
@@ -66,12 +70,26 @@ def check_conversation_pin(conversation_pin, event):
         # Stop the collection if meeting the collection goal
         if len(list_contact_ids) >= session['Item']['collectionGoal']:
             session['Item']['collectionStatus'] = 'STOP'
+            if mode == 'human':
+                # (Human/Human) Important: Release the queue back to queue pool
+                queue_pool_table = dynamodb.Table('connectQueuePool')
+                with queue_pool_table.batch_writer() as batch:
+                    routing_info = session['Item']['routingInfo']
+                    batch.put_item(Item=routing_info)
         table.put_item(Item=session['Item'], ReturnValues='NONE')
 
     return response
 
 
 def lambda_handler(event, context):
+    """
+    The caller function of the lambda function
+    :param event: event-specified information, type: dict
+    :param context: context information (Not used)
+    :return: response dict
+    """
+    logging.info(event)
+
     if 'userPIN' in event['Details']['Parameters']:
         user_pin = event['Details']['Parameters']['userPIN']
         response = check_user_pin(user_pin)
@@ -80,5 +98,5 @@ def lambda_handler(event, context):
         response = check_conversation_pin(conversation_pin, event)
     else:
         response = {'response': 'False'}
-    print('response: {}'.format(response))
+    logging.info(response)
     return response

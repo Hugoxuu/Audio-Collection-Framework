@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import boto3
+from boto3.dynamodb.conditions import Attr
 import urllib.request
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -21,20 +22,18 @@ class UserManager:
     :param AWS_REGION_NAME: Region name for AWS services
     :param CONNECT_INSTANCE_ID: AWS Connect Instance ID
     :param CONNECT_SECURITY_ID: AWS Connect Default Security Profile ID for agent user
-    :param CONNECT_ROUTING_ID: AWS Connect Default Routing Profile ID
     :param CONNECT_PHONE_NUMBER: AWS Connect Phone number for customer to call
     :param CONNECT_CCP_URL: AWS Connect Contact Center Portal (CCP) for agent user to login and receive the call
     """
 
     def __init__(self, config_path, ACCESS_KEY_ID, ACCESS_KEY, AWS_REGION_NAME,
-                 CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_ROUTING_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL):
+                 CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL):
         # Retrieve AWS Information
         self.ACCESS_KEY_ID = ACCESS_KEY_ID
         self.ACCESS_KEY = ACCESS_KEY
         self.AWS_REGION_NAME = AWS_REGION_NAME
         self.CONNECT_INSTANCE_ID = CONNECT_INSTANCE_ID
         self.CONNECT_SECURITY_ID = CONNECT_SECURITY_ID
-        self.CONNECT_ROUTING_ID = CONNECT_ROUTING_ID
         self.CONNECT_PHONE_NUMBER = CONNECT_PHONE_NUMBER
         self.CONNECT_CCP_URL = CONNECT_CCP_URL
         self.config_path = config_path
@@ -52,38 +51,75 @@ class UserManager:
         while decision != '1' and decision != '2':
             decision = input('Invalid input. Select a conversation role (Press 1 for customer, 2 for agent) : ')
 
-        name = input('Please enter the name of the conversation role (blank for default name): ')
-        if len(name) == 0:
-            name = 'Default User Name'
+        user_name = input('Please enter the name of the conversation role (blank for default name): ')
+        if len(user_name) == 0:
+            user_name = 'Default User Name'
 
         role = ''
         PIN = ''
         account = {}
-        try:
-            if decision == '1':
-                role = 'customer'
-                PIN, account = self.create_customer_user(name)
-            elif decision == '2':
-                role = 'agent'
-                PIN, account = self.create_agent_user(name)
-        except Exception as e:
-            logging.error('Error: {}'.format(e))
+        # try:
+        if decision == '1':
+            role = 'customer'
+            PIN, account = self.create_customer_user(user_name)
+        elif decision == '2':
+            role = 'agent'
+            collection_pin = self.ask_collection_pin()
+            PIN, account = self.create_agent_user(user_name, collection_pin)
+            # Print out the information
+            logging.info('Your user information is shown below:')
+            logging.info('User Name: {}'.format(user_name))
+            logging.info('User PIN: {}'.format(PIN))
+            logging.info('Role: {}'.format(role))
+            logging.info('Account Information: {}'.format(account))
+        # except Exception as e:
+        #     logging.error('Error: {}'.format(e))
 
-        # Print out the information
-        logging.info('Your user information is shown below:')
-        logging.info('User Name: {}'.format(name))
-        logging.info('User PIN: {}'.format(PIN))
-        logging.info('Role: {}'.format(role))
-        logging.info('Account Information: {}'.format(account))
         return
 
-    def create_user_given_info(self, role, name):
+    def ask_collection_pin(self):
+        """
+        Ask the user for collection pin they want the user account to be associated with
+
+        """
+        collection_request_list = self.list_collection_request_option()
+        print('Please select among the following collection requests:')
+        for index, collection_request in enumerate(collection_request_list, start=1):
+            print('Collection PIN: {}, Collection Name: {} - Enter {}'.format(collection_request['collectionPIN'],
+                                                                              collection_request['collectionName'],
+                                                                              index))
+        choice = input('Your choice: ')
+        while not utils.is_number_choice_valid(choice, len(collection_request_list)):
+            choice = input('Invalid input. Your choice: ')
+        choice_index = int(choice) - 1
+        collection_pin = collection_request_list[choice_index]['collectionPIN']
+        return collection_pin
+
+    def list_collection_request_option(self):
+        """
+        List the ongoing collection request
+        :return: [{collectionPIN: xx, collectionName: xx}, ...]
+        """
+        table = self.dynamodb.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
+        collection_request_list = table.scan(ProjectionExpression='collectionPIN,collectionName',
+                                             FilterExpression=Attr('collectionStatus').ne('STOP') and Attr('mode').eq(
+                                                 'human'))['Items']
+        return collection_request_list
+
+    def create_user_given_info(self, role, user_name, collection_pin):
+        """
+        Create a user given enough information
+        :param role: user conversation role
+        :param user_name: user name
+        :type collection_pin: str
+        :return:
+        """
         PIN = ''
         account = {}
         if role == 'customer':
-            PIN, account = self.create_customer_user(name)
+            PIN, account = self.create_customer_user(user_name)
         elif role == 'agent':
-            PIN, account = self.create_agent_user(name)
+            PIN, account = self.create_agent_user(user_name, collection_pin)
         else:
             logging.error('Error: Invalid role input.')
 
@@ -101,22 +137,30 @@ class UserManager:
         self.save2db(name, PIN, role, account)
         return PIN, account
 
-    def create_agent_user(self, name):
+    def create_agent_user(self, name, collection_pin):
         """
         Create an agent user
 
+        :param name: user name
+        :param collection_pin: collection request pin that is binded with the agent account
         :return: 6-digit PIN and  account information for the customer user that just created
         """
         PIN = self.generate_user_pin()
         role = 'agent'
         account = self.get_user_account(PIN)
-        account['phoneNumber'] = self.get_phone_number()
-        account['url'] = self.get_URL()
-
-        response = self.connect_create_user_account(account['username'], account['password'], PIN)
-        account['userId'] = response['UserId']
-
-        self.save2db(name, PIN, role, account)
+        account['collectionPIN'] = collection_pin
+        response = self.connect_create_user_account(account['username'], account['password'], account['collectionPIN'],
+                                                    PIN)
+        if 'error' in response:
+            logging.error('Error: {}'.format(response['error']))
+        else:
+            # Get collection request name
+            table = self.dynamodb.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
+            account['collectionName'] = \
+                table.get_item(Key={utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: collection_pin})['Item'][
+                    'collectionName']
+            account['userId'] = response['UserId']
+            self.save2db(name, PIN, role, account)
         return PIN, account
 
     def generate_user_pin(self):
@@ -131,17 +175,17 @@ class UserManager:
             PIN = utils.random_with_n_digits(num_digit)
         return PIN
 
-    def save2db(self, name, PIN, role, account):
+    def save2db(self, name, user_pin, role, account):
         """
         Save the user information into Dynamo DB
 
-        :param PIN: 6-digit user PIN code
+        :param user_pin: 6-digit user PIN code
         :param role: user role type
         :param account: user account information
         """
         table = self.dynamodb.Table(utils.USER_ACCOUNT_DYNAMODB_TABLE)
         with table.batch_writer() as batch:
-            user_item = {'name': name, 'PIN': PIN, 'type': role, 'account': account}
+            user_item = {'name': name, 'PIN': user_pin, 'type': role, 'account': account}
             batch.put_item(Item=user_item)
         return
 
@@ -162,15 +206,25 @@ class UserManager:
         logging.info('All users are listed.')
         return user_list
 
-    def connect_create_user_account(self, username, password, PIN):
+    def connect_create_user_account(self, username, password, collection_pin, PIN):
         """
         Call the Amazon Connect API to create a new user account
 
         :param username: as named
         :param password: as named
+        :param collection_pin: collection request pin that is associated with the agent account
         :param PIN: 6-digit user PIN code
         :return: user account information sent from Amazon Connect, containing user account id
         """
+        table = self.dynamodb.Table(utils.COLLECTION_REQUEST_DYNAMODB_TABLE)
+        session = table.get_item(Key={utils.COLLECTION_REQUEST_DYNAMODB_TABLE_KEY: str(collection_pin)})
+
+        # Get parameters from session item
+        if 'Item' not in session:
+            logging.error('Error: No collection request is found to associate the user account with.')
+            return {'error': 'No collection request is found to associate the user account with.'}
+
+        routing_profile_id = session['Item']['routingInfo']['routingProfileID']
         connect = boto3.client('connect', region_name=self.AWS_REGION_NAME, aws_access_key_id=self.ACCESS_KEY_ID,
                                aws_secret_access_key=self.ACCESS_KEY)
         # Send request to Amazon Connect
@@ -191,7 +245,7 @@ class UserManager:
             SecurityProfileIds=[
                 self.CONNECT_SECURITY_ID,
             ],
-            RoutingProfileId=self.CONNECT_ROUTING_ID,
+            RoutingProfileId=routing_profile_id,
             InstanceId=self.CONNECT_INSTANCE_ID
         )
         return response
@@ -282,14 +336,14 @@ class UserManager:
             logging.error('Error: {}'.format(e))
         return
 
-    def check_user_type(self, PIN):
+    def check_user_type(self, user_pin):
         """
         Check the user role type given the user PIN
-        :param PIN: 6-digit user PIN code
+        :param user_pin: 6-digit user PIN code
         :return: user role type
         """
         table = self.dynamodb.Table('userAccount')
-        session = table.get_item(Key={utils.USER_ACCOUNT_DYNAMODB_TABLE_KEY: str(PIN)})
+        session = table.get_item(Key={utils.USER_ACCOUNT_DYNAMODB_TABLE_KEY: str(user_pin)})
         if 'Item' in session:
             return session['Item']['type']
         return ''
@@ -331,20 +385,20 @@ class UserManager:
         logging.info('All users are deleted.')
         return
 
-    def delete_user_given_pin(self, PIN):
+    def delete_user_given_pin(self, user_pin):
         """
         Delete a certain user given a valid PIN
 
-        :param PIN: 6-digit user PIN code
+        :param user_pin: 6-digit user PIN code
         """
         table = self.dynamodb.Table('userAccount')
-        session = table.get_item(Key={utils.USER_ACCOUNT_DYNAMODB_TABLE_KEY: str(PIN)})
+        session = table.get_item(Key={utils.USER_ACCOUNT_DYNAMODB_TABLE_KEY: str(user_pin)})
         error_list = []
         if 'Item' in session:
             role = session['Item']['type']
             # Delete this item from the table
             try:
-                table.delete_item(Key={utils.USER_ACCOUNT_DYNAMODB_TABLE_KEY: PIN})
+                table.delete_item(Key={utils.USER_ACCOUNT_DYNAMODB_TABLE_KEY: user_pin})
             except:
                 error_message = 'Error: Failed to delete user information on AWS DynamoDB'
                 logging.error(error_message)
@@ -385,13 +439,13 @@ class UserManager:
         return self.CONNECT_CCP_URL
 
     @staticmethod
-    def get_user_account(PIN):
+    def get_user_account(user_pin):
         """
         Retrieve the account information
 
-        :param PIN: 6-digit user PIN code
+        :param user_pin: 6-digit user PIN code
         :return: user account information
         """
-        username = 'agent_' + PIN  # Default
-        password = 'Abcd' + PIN  # Default
+        username = 'agent_' + user_pin  # Default
+        password = 'Abcd' + user_pin  # Default
         return {'username': username, 'password': password}

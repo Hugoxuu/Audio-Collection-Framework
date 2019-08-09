@@ -17,13 +17,13 @@ from aws_deep_sense_spoken_data_collection_framework.call_recordings_manager imp
 from aws_deep_sense_spoken_data_collection_framework.collection_request_manager import CollectionRequestManager
 from aws_deep_sense_spoken_data_collection_framework.user_manager import UserManager
 
-config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'configurations', 'aws_config_isengard')
+# Change to your desired configuration file
+config_path = os.path.join(os.path.dirname(__file__), '..', '..', 'configurations', 'aws_config')
 
 ACCESS_KEY_ID, ACCESS_KEY = utils.get_aws_access_key(config_path)
 AWS_REGION_NAME = utils.get_aws_region_name(config_path)
 CALL_RECORDINGS_BUCKET_NAME = utils.get_call_recordings_bucket_name(config_path)
-CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_ROUTING_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL = utils.get_connect_info(
-    config_path)
+CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL = utils.get_connect_info(config_path)
 
 
 def parser_add_argument():
@@ -40,10 +40,6 @@ def parser_add_argument():
                         help='change the collection status of an onging collection request')
     parser.add_argument('-lc', '--listCollection', action='store_true',
                         help='list all ongoing collection requests')
-    parser.add_argument('-ec', '--endCollection', action='store_true',
-                        help='end a collection request, release the resources (Deprecated)')
-    parser.add_argument('-ea', '--endAllCollection', action='store_true',
-                        help='end all collection requests (Deprecated)')
     parser.add_argument('-cu', '--createUser', action='store_true',
                         help='create a new user as conversation role')
     parser.add_argument('-lu', '--listAllUser', action='store_true',
@@ -72,7 +68,7 @@ def main():
 
     """
     args = parser_add_argument()
-    if args.startCollection or args.getCollection or args.changeCollectionStatus or args.listCollection or args.endCollection or args.endAllCollection:
+    if args.startCollection or args.getCollection or args.changeCollectionStatus or args.listCollection:
         collection_request_manager = CollectionRequestManager(ACCESS_KEY_ID, ACCESS_KEY, AWS_REGION_NAME,
                                                               CALL_RECORDINGS_BUCKET_NAME)
         if args.startCollection:
@@ -87,17 +83,10 @@ def main():
         elif args.listCollection:
             print('List all ongoing collection requests...')
             return collection_request_manager.list_collect_requests()
-        elif args.endCollection:
-            print('End a collection request...')
-            return collection_request_manager.end_collect_request()
-        elif args.endAllCollection:
-            print('End all collection requests...')
-            return collection_request_manager.end_all_collect_requests()
 
     elif args.createUser or args.listAllUser or args.openConnectPortal or args.deleteUser or args.deleteAllUser:
         user_manager = UserManager(config_path, ACCESS_KEY_ID, ACCESS_KEY, AWS_REGION_NAME,
-                                   CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_ROUTING_ID, CONNECT_PHONE_NUMBER,
-                                   CONNECT_CCP_URL)
+                                   CONNECT_INSTANCE_ID, CONNECT_SECURITY_ID, CONNECT_PHONE_NUMBER, CONNECT_CCP_URL)
         if args.createUser:
             print('Create a new user as conversation role...')
             return user_manager.create_user()
